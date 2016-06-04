@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Runtime-Security-Auth</string>
+    <string name="action_login">Login</string>
+</resources>
