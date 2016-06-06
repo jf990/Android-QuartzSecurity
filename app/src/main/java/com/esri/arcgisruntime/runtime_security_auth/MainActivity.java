@@ -1,5 +1,7 @@
 package com.esri.arcgisruntime.runtime_security_auth;
 
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
@@ -15,13 +17,16 @@ import com.esri.arcgisruntime.mapping.view.MapView;
 import com.esri.arcgisruntime.portal.Portal;
 import com.esri.arcgisruntime.portal.PortalInfo;
 import com.esri.arcgisruntime.loadable.LoadStatus;
+import com.esri.arcgisruntime.security.AuthenticationManager;
+import com.esri.arcgisruntime.security.DefaultAuthenticationChallengeHandler;
 
 public class MainActivity extends AppCompatActivity {
 
     private MapView mMapView;
-    private double mStartLat = 40.7576;
-    private double mStartLon = -73.9857;
-    private int mStartLOD = 17;
+    private double mStartLatitude = 40.7576;
+    private double mStartLongitude = -73.9857;
+    private int mStartLevelOfDetail = 17;
+    private String mPortalURL = "http://www.arcgis.com";
     private boolean mUserIsLoggedIn = false;
 
     @Override
@@ -31,6 +36,7 @@ public class MainActivity extends AppCompatActivity {
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
+        // setup the Map button
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -41,8 +47,9 @@ public class MainActivity extends AppCompatActivity {
         });
 
         mMapView = (MapView) findViewById(R.id.mapView);
-        Map map = new Map(Basemap.Type.IMAGERY_WITH_LABELS, mStartLat, mStartLon, mStartLOD);
+        Map map = new Map(Basemap.Type.IMAGERY_WITH_LABELS, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
         mMapView.setMap(map);
+        setupChallengeHandler();
     }
 
     @Override
@@ -65,13 +72,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        menu.findItem(R.id.action_login).setTitle(mUserIsLoggedIn ? R.string.action_logout : R.string.action_login);
+        return super.onPrepareOptionsMenu(menu);
+    }
+
+    @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
-        //noinspection SimplifiableIfStatement
         if (id == R.id.action_login) {
             if (mUserIsLoggedIn) {
                 logoutUser();
@@ -84,19 +96,34 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean loginInUser() {
-        final Portal arcgisPortal = new Portal("http://www.arcgis.com", true);
+        final Portal arcgisPortal = new Portal(mPortalURL, true);
         arcgisPortal.addDoneLoadingListener(new Runnable() {
             @Override
             public void run() {
-                String info;
+                final String info;
                 LoadStatus loadStatus = arcgisPortal.getLoadStatus();
                 if (loadStatus == LoadStatus.LOADED) {
                     PortalInfo portalInformation = arcgisPortal.getPortalInfo();
-                    info = portalInformation.getPortalName();
+                    info = portalInformation.getPortalName() + " for " + portalInformation.getOrganizationName();
                     mUserIsLoggedIn = true;
                 } else {
-                    info = "Login failed";
+                    info = "Login failed - but why? cancel? invalid credentials? bad network?";
                 }
+                invalidateOptionsMenu();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (!isFinishing()){
+                            AlertDialog.Builder alertDialog = new AlertDialog.Builder(MainActivity.this);
+                            alertDialog.setTitle(R.string.action_login);
+                            alertDialog.setMessage(info);
+                            alertDialog.setCancelable(true);
+                            alertDialog.setNegativeButton(R.string.action_OK, null);
+                            AlertDialog alertDialogInstance = alertDialog.create();
+                            alertDialogInstance.show();
+                        }
+                    }
+                });
             }
         });
         arcgisPortal.loadAsync();
@@ -105,6 +132,12 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean logoutUser () {
         mUserIsLoggedIn = false;
+        invalidateOptionsMenu();
         return true;
+    }
+
+    private void setupChallengeHandler () {
+        DefaultAuthenticationChallengeHandler authenticationChallengeHandler = new DefaultAuthenticationChallengeHandler(this);
+        AuthenticationManager.setAuthenticationChallengeHandler(authenticationChallengeHandler);
     }
 }
