@@ -136,6 +136,10 @@ public class MainActivity extends AppCompatActivity {
         return true;
     }
 
+    /**
+     * Set a default challenge handler provided by the SDK. We could implement our own by
+     * deriving from AuthenticationChallengeHandler interface.
+     */
     private void setupChallengeHandler () {
         DefaultAuthenticationChallengeHandler authenticationChallengeHandler = new DefaultAuthenticationChallengeHandler(this);
         AuthenticationManager.setAuthenticationChallengeHandler(authenticationChallengeHandler);
