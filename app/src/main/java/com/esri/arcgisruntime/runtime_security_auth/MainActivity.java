@@ -7,6 +7,7 @@ import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.util.Log;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -29,6 +30,12 @@ public class MainActivity extends AppCompatActivity {
     private String mPortalURL = "http://www.arcgis.com";
     private boolean mUserIsLoggedIn = false;
 
+    // define callback interface for login completion event
+    interface LoginCompletionInterface {
+        void onLoginCompleted();
+        void onLoginFailed();
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -41,8 +48,7 @@ public class MainActivity extends AppCompatActivity {
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Snackbar.make(view, "Login", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
+                onClickMapButton(view);
             }
         });
 
@@ -88,14 +94,14 @@ public class MainActivity extends AppCompatActivity {
             if (mUserIsLoggedIn) {
                 logoutUser();
             } else {
-                loginInUser();
+                loginUser(null);
             }
             return true;
         }
         return super.onOptionsItemSelected(item);
     }
 
-    private boolean loginInUser() {
+    private boolean loginUser(final LoginCompletionInterface callback) {
         final Portal arcgisPortal = new Portal(mPortalURL, true);
         arcgisPortal.addDoneLoadingListener(new Runnable() {
             @Override
@@ -106,8 +112,14 @@ public class MainActivity extends AppCompatActivity {
                     PortalInfo portalInformation = arcgisPortal.getPortalInfo();
                     info = portalInformation.getPortalName() + " for " + portalInformation.getOrganizationName();
                     mUserIsLoggedIn = true;
+                    if (callback != null) {
+                        callback.onLoginCompleted();
+                    }
                 } else {
                     info = "Login failed - but why? cancel? invalid credentials? bad network?";
+                    if (callback != null) {
+                        callback.onLoginFailed();
+                    }
                 }
                 invalidateOptionsMenu();
                 runOnUiThread(new Runnable() {
@@ -144,4 +156,32 @@ public class MainActivity extends AppCompatActivity {
         DefaultAuthenticationChallengeHandler authenticationChallengeHandler = new DefaultAuthenticationChallengeHandler(this);
         AuthenticationManager.setAuthenticationChallengeHandler(authenticationChallengeHandler);
     }
+
+    /**
+     * Handler to respond to the Map button tap
+     * @param view
+     */
+    private void onClickMapButton(View view) {
+        if ( ! mUserIsLoggedIn) {
+            loginUser(loginCompletionCallback);
+        }
+        // Temp placeholder for testing only - to be removed.
+        Snackbar.make(view, R.string.action_login, Snackbar.LENGTH_LONG)
+                .setAction("Action", null).show();
+    }
+
+    /**
+     * A simple interface for handling asynchronous events after a login succeeds or fails.
+     */
+    private final LoginCompletionInterface loginCompletionCallback = new LoginCompletionInterface () {
+        public void onLoginCompleted () {
+            // start the map viewer activity
+            Log.d("Login", "Login complete ready to show items");
+        }
+
+        public void onLoginFailed () {
+            // message user about cant show map view activity until successfully logged in
+            Log.d("Login", "Cannot show items until you login");
+        }
+    };
 }
