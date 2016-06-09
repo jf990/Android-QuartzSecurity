@@ -3,5 +3,6 @@
     <string name="action_login">Login</string>
     <string name="action_logout">Logout</string>
     <string name="action_OK">OK</string>
+    <string name="system_error">System error</string>
     <string name="client_id">KX2BOTDNk1PdxrAa</string>
 </resources>

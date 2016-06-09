@@ -1,10 +1,8 @@
 package com.esri.arcgisruntime.runtime_security_auth;
 
 import android.app.AlertDialog;
-import android.content.DialogInterface;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
@@ -12,18 +10,25 @@ import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
 
+import com.esri.arcgisruntime.concurrent.ListenableFuture;
 import com.esri.arcgisruntime.mapping.Basemap;
 import com.esri.arcgisruntime.mapping.Map;
 import com.esri.arcgisruntime.mapping.view.MapView;
 import com.esri.arcgisruntime.portal.Portal;
+import com.esri.arcgisruntime.portal.PortalGroup;
 import com.esri.arcgisruntime.portal.PortalInfo;
 import com.esri.arcgisruntime.loadable.LoadStatus;
+import com.esri.arcgisruntime.portal.PortalItem;
+import com.esri.arcgisruntime.portal.PortalQueryParams;
+import com.esri.arcgisruntime.portal.PortalQueryResultSet;
 import com.esri.arcgisruntime.security.AuthenticationManager;
 import com.esri.arcgisruntime.security.DefaultAuthenticationChallengeHandler;
+
 
 public class MainActivity extends AppCompatActivity {
 
     private MapView mMapView;
+    private Portal mArcgisPortal = null;
     private double mStartLatitude = 40.7576;
     private double mStartLongitude = -73.9857;
     private int mStartLevelOfDetail = 17;
@@ -102,21 +107,21 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean loginUser(final LoginCompletionInterface callback) {
-        final Portal arcgisPortal = new Portal(mPortalURL, true);
-        arcgisPortal.addDoneLoadingListener(new Runnable() {
+        mArcgisPortal = new Portal(mPortalURL, true);
+        mArcgisPortal.addDoneLoadingListener(new Runnable() {
             @Override
             public void run() {
                 final String info;
-                LoadStatus loadStatus = arcgisPortal.getLoadStatus();
+                LoadStatus loadStatus = mArcgisPortal.getLoadStatus();
                 if (loadStatus == LoadStatus.LOADED) {
-                    PortalInfo portalInformation = arcgisPortal.getPortalInfo();
+                    PortalInfo portalInformation = mArcgisPortal.getPortalInfo();
                     info = portalInformation.getPortalName() + " for " + portalInformation.getOrganizationName();
                     mUserIsLoggedIn = true;
                     if (callback != null) {
                         callback.onLoginCompleted();
                     }
                 } else {
-                    info = "Login failed - but why? cancel? invalid credentials? bad network?";
+                    info = "Login failed - but why? cancel? invalid credentials? mPortalURL? bad network?";
                     if (callback != null) {
                         callback.onLoginFailed();
                     }
@@ -126,23 +131,17 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void run() {
                         if (!isFinishing()){
-                            AlertDialog.Builder alertDialog = new AlertDialog.Builder(MainActivity.this);
-                            alertDialog.setTitle(R.string.action_login);
-                            alertDialog.setMessage(info);
-                            alertDialog.setCancelable(true);
-                            alertDialog.setNegativeButton(R.string.action_OK, null);
-                            AlertDialog alertDialogInstance = alertDialog.create();
-                            alertDialogInstance.show();
+                            showErrorAlert(getString(R.string.action_login), info);
                         }
                     }
                 });
             }
         });
-        arcgisPortal.loadAsync();
+        mArcgisPortal.loadAsync();
         return true;
     }
 
-    private boolean logoutUser () {
+    private boolean logoutUser() {
         mUserIsLoggedIn = false;
         invalidateOptionsMenu();
         return true;
@@ -150,38 +149,95 @@ public class MainActivity extends AppCompatActivity {
 
     /**
      * Set a default challenge handler provided by the SDK. We could implement our own by
-     * deriving from AuthenticationChallengeHandler interface.
+     * deriving from the arcgisruntime.security.AuthenticationChallengeHandler interface.
      */
-    private void setupChallengeHandler () {
-        DefaultAuthenticationChallengeHandler authenticationChallengeHandler = new DefaultAuthenticationChallengeHandler(this);
-        AuthenticationManager.setAuthenticationChallengeHandler(authenticationChallengeHandler);
+    private void setupChallengeHandler() {
+        try {
+            AuthenticationManager.setAuthenticationChallengeHandler(new DefaultAuthenticationChallengeHandler(this));
+        } catch (Exception exception) {
+            showErrorAlert(getString(R.string.system_error), "Cannot create a required object. " + exception.getLocalizedMessage());
+        }
+    }
+
+    private void showBasemapSelector() {
+        if (mArcgisPortal == null) {
+            // if we arrived here yet not logged in then some logic is wrong.
+            return;
+        }
+        PortalInfo portalInformation = mArcgisPortal.getPortalInfo();
+        PortalQueryParams queryParams = new PortalQueryParams();
+        queryParams.setQuery(portalInformation.getBasemapGalleryGroupQuery());
+        final ListenableFuture<PortalQueryResultSet<PortalGroup>> groupFuture = mArcgisPortal.findGroupsAsync(queryParams);
+        groupFuture.addDoneListener(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    PortalQueryResultSet<PortalGroup> basemapGroupResult = groupFuture.get();
+                    PortalGroup group = basemapGroupResult.getResults().get(0);
+                    PortalQueryParams basemapQueryParams = new PortalQueryParams();
+                    basemapQueryParams.setQueryForItemsInGroup(group.getId());
+                    final ListenableFuture<PortalQueryResultSet<PortalItem>> contentFuture = mArcgisPortal.findItemsAsync(basemapQueryParams);
+                    contentFuture.addDoneListener(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                PortalQueryResultSet<PortalItem> portalResultSet = contentFuture.get();
+                                if (portalResultSet != null && portalResultSet.getTotalResults() > 0) {
+                                    // iterate these items and show the thumbnails
+                                    for (PortalItem portalItem : portalResultSet.getResults()) {
+                                        Log.d("Basemaps query", portalItem.getTitle());
+                                    }
+                                }
+                            } catch (Exception exception) {
+                                showErrorAlert(getString(R.string.system_error), "Cannot load portal query results. " + exception.getLocalizedMessage());
+                            }
+                        }
+                    });
+                } catch (Exception exception) {
+                    showErrorAlert(getString(R.string.system_error), "Cannot query portal. " + exception.getLocalizedMessage());
+                }
+            }
+        });
     }
 
     /**
-     * Handler to respond to the Map button tap
+     * Handler to respond to the Map button tap. If the user is logged in show the list of
+     * basemaps from their organizational account.
      * @param view
      */
     private void onClickMapButton(View view) {
         if ( ! mUserIsLoggedIn) {
             loginUser(loginCompletionCallback);
+        } else {
+            showBasemapSelector();
         }
-        // Temp placeholder for testing only - to be removed.
-        Snackbar.make(view, R.string.action_login, Snackbar.LENGTH_LONG)
-                .setAction("Action", null).show();
     }
 
     /**
      * A simple interface for handling asynchronous events after a login succeeds or fails.
      */
     private final LoginCompletionInterface loginCompletionCallback = new LoginCompletionInterface () {
-        public void onLoginCompleted () {
-            // start the map viewer activity
-            Log.d("Login", "Login complete ready to show items");
+        public void onLoginCompleted() {
+            showBasemapSelector();
         }
 
-        public void onLoginFailed () {
-            // message user about cant show map view activity until successfully logged in
-            Log.d("Login", "Cannot show items until you login");
+        public void onLoginFailed() {
+            showErrorAlert(getString(R.string.action_login), "You must login to select available basemaps.");
         }
     };
+
+    /**
+     * A simple alert box with an OK button to cancel it.
+     * @param errorTitle String A string to use for the title of the alert.
+     * @param errorMessage String A string to use for the message to display.
+     */
+    private void showErrorAlert (String errorTitle, String errorMessage) {
+        AlertDialog.Builder alertDialog = new AlertDialog.Builder(MainActivity.this);
+        alertDialog.setTitle(errorTitle);
+        alertDialog.setMessage(errorMessage);
+        alertDialog.setCancelable(true);
+        alertDialog.setNegativeButton(R.string.action_OK, null);
+        AlertDialog alertDialogInstance = alertDialog.create();
+        alertDialogInstance.show();
+    }
 }
