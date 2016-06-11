@@ -5,14 +5,16 @@ import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
-import android.util.Log;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.AdapterView;
+import android.widget.GridView;
 
 import com.esri.arcgisruntime.concurrent.ListenableFuture;
 import com.esri.arcgisruntime.mapping.Basemap;
 import com.esri.arcgisruntime.mapping.Map;
+import com.esri.arcgisruntime.mapping.Viewpoint;
 import com.esri.arcgisruntime.mapping.view.MapView;
 import com.esri.arcgisruntime.portal.Portal;
 import com.esri.arcgisruntime.portal.PortalGroup;
@@ -24,16 +26,25 @@ import com.esri.arcgisruntime.portal.PortalQueryResultSet;
 import com.esri.arcgisruntime.security.AuthenticationManager;
 import com.esri.arcgisruntime.security.DefaultAuthenticationChallengeHandler;
 
+import java.util.List;
+
 
 public class MainActivity extends AppCompatActivity {
 
     private MapView mMapView;
     private Portal mArcgisPortal = null;
+    private boolean mUserIsLoggedIn = false;
+
+    // Configuration to set at initial load or reset:
+    private Basemap.Type mStartBasemapType = Basemap.Type.IMAGERY_WITH_LABELS;
     private double mStartLatitude = 40.7576;
     private double mStartLongitude = -73.9857;
     private int mStartLevelOfDetail = 17;
     private String mPortalURL = "http://www.arcgis.com";
-    private boolean mUserIsLoggedIn = false;
+
+    // Configuration to restore on resume, reload:
+    private Viewpoint mMapViewPoint;
+    private double mMapScale;
 
     // define callback interface for login completion event
     interface LoginCompletionInterface {
@@ -58,7 +69,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         mMapView = (MapView) findViewById(R.id.mapView);
-        Map map = new Map(Basemap.Type.IMAGERY_WITH_LABELS, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
+        Map map = new Map(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
         mMapView.setMap(map);
         setupChallengeHandler();
     }
@@ -159,6 +170,55 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void showGridDialog(final PortalQueryResultSet<PortalItem> portalResultSet) {
+        GridView gridView = new GridView(this);
+        final AlertDialog gridViewAlertDialog;
+
+        gridView.setAdapter(new PortalItemQueryAdapter(getApplicationContext(), MainActivity.this, portalResultSet));
+        gridView.setNumColumns(2);
+        gridView.setDrawSelectorOnTop(true);
+        gridView.setSelector(R.drawable.selector_basemap);
+
+        // Set grid view to alertDialog
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setView(gridView);
+        builder.setTitle(R.string.title_select_basemap);
+        gridViewAlertDialog = builder.show();
+
+        gridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                // TODO: get which map was selected
+                if (position >= 0 && position < portalResultSet.getTotalResults()) {
+                    List<PortalItem> portalResults = portalResultSet.getResults();
+                    if (portalResults != null) {
+                        PortalItem portalItem = portalResults.get(position);
+                        if (portalItem != null) {
+                            if (gridViewAlertDialog != null) {
+                                gridViewAlertDialog.dismiss();
+                            }
+                            changeBasemapToPortalItem(portalItem);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    private void changeBasemapToPortalItem(PortalItem portalItem) {
+        if (portalItem != null) {
+            mMapViewPoint = mMapView.getCurrentViewpoint(Viewpoint.Type.CENTER_AND_SCALE);
+            mMapScale = mMapView.getMapScale();
+            Map newMap = new Map(portalItem);
+            if (newMap != null) {
+                mMapView.setMap(newMap);
+                // position map to where we left off
+                mMapView.setViewpointAsync(mMapViewPoint);
+                mMapView.setViewpointScaleAsync(mMapScale);
+            }
+        }
+    }
+
     private void showBasemapSelector() {
         if (mArcgisPortal == null) {
             // if we arrived here yet not logged in then some logic is wrong.
@@ -182,12 +242,7 @@ public class MainActivity extends AppCompatActivity {
                         public void run() {
                             try {
                                 PortalQueryResultSet<PortalItem> portalResultSet = contentFuture.get();
-                                if (portalResultSet != null && portalResultSet.getTotalResults() > 0) {
-                                    // iterate these items and show the thumbnails
-                                    for (PortalItem portalItem : portalResultSet.getResults()) {
-                                        Log.d("Basemaps query", portalItem.getTitle());
-                                    }
-                                }
+                                showGridDialog(portalResultSet);
                             } catch (Exception exception) {
                                 showErrorAlert(getString(R.string.system_error), "Cannot load portal query results. " + exception.getLocalizedMessage());
                             }
@@ -209,7 +264,7 @@ public class MainActivity extends AppCompatActivity {
         if ( ! mUserIsLoggedIn) {
             loginUser(loginCompletionCallback);
         } else {
-            showBasemapSelector();
+             showBasemapSelector();
         }
     }
 

@@ -24,7 +24,7 @@
         </activity>
         <activity
             android:name="com.esri.arcgisruntime.security.DefaultOAuthIntentReceiver"
-            android:label="OAuthIntentReceiver"
+            android:label="DefaultOAuthIntentReceiver"
             android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
