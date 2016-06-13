@@ -30,7 +30,7 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="urn:ietf:wg:oauth:2.0:oob"/>
+                <data android:scheme="arcgis-runtime-auth" android:host="auth"></data>
             </intent-filter>
         </activity>
     </application>

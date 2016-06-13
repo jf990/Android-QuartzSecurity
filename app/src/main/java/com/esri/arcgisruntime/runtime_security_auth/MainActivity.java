@@ -25,6 +25,7 @@ import com.esri.arcgisruntime.portal.PortalQueryParams;
 import com.esri.arcgisruntime.portal.PortalQueryResultSet;
 import com.esri.arcgisruntime.security.AuthenticationManager;
 import com.esri.arcgisruntime.security.DefaultAuthenticationChallengeHandler;
+import com.esri.arcgisruntime.security.OAuthConfiguration;
 
 import java.util.List;
 
@@ -41,6 +42,7 @@ public class MainActivity extends AppCompatActivity {
     private double mStartLongitude = -73.9857;
     private int mStartLevelOfDetail = 17;
     private String mPortalURL = "http://www.arcgis.com";
+    private String mOAuthRedirectURI = "arcgis-runtime-auth://auth"; // https://www.arcgis.com/sharing/oauth2/authorize";
 
     // Configuration to restore on resume, reload:
     private Viewpoint mMapViewPoint;
@@ -132,7 +134,7 @@ public class MainActivity extends AppCompatActivity {
                         callback.onLoginCompleted();
                     }
                 } else {
-                    info = "Login failed - but why? cancel? invalid credentials? mPortalURL? bad network?";
+                    info = "Login failed - but why? cancel? invalid credentials? mPortalURL? bad network? " + loadStatus;
                     if (callback != null) {
                         callback.onLoginFailed();
                     }
@@ -163,6 +165,12 @@ public class MainActivity extends AppCompatActivity {
      * deriving from the arcgisruntime.security.AuthenticationChallengeHandler interface.
      */
     private void setupChallengeHandler() {
+        try {
+            OAuthConfiguration oauthConfig = new OAuthConfiguration(mPortalURL, getString(R.string.client_id), mOAuthRedirectURI);
+            AuthenticationManager.addOAuthConfiguration(oauthConfig);
+        } catch (Exception exception) {
+            showErrorAlert(getString(R.string.system_error), "Cannot setup OAuth: " + exception.getLocalizedMessage());
+        }
         try {
             AuthenticationManager.setAuthenticationChallengeHandler(new DefaultAuthenticationChallengeHandler(this));
         } catch (Exception exception) {
