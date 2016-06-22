@@ -34,6 +34,7 @@ public class MainActivity extends AppCompatActivity {
 
     private MapView mMapView;
     private Portal mArcgisPortal = null;
+    private boolean mUseOAuth = false;
     private boolean mUserIsLoggedIn = false;
 
     // Configuration to set at initial load or reset:
@@ -165,11 +166,13 @@ public class MainActivity extends AppCompatActivity {
      * deriving from the arcgisruntime.security.AuthenticationChallengeHandler interface.
      */
     private void setupChallengeHandler() {
-        try {
-            OAuthConfiguration oauthConfig = new OAuthConfiguration(mPortalURL, getString(R.string.client_id), mOAuthRedirectURI);
-            AuthenticationManager.addOAuthConfiguration(oauthConfig);
-        } catch (Exception exception) {
-            showErrorAlert(getString(R.string.system_error), "Cannot setup OAuth: " + exception.getLocalizedMessage());
+        if (mUseOAuth) {
+            try {
+                OAuthConfiguration oauthConfig = new OAuthConfiguration(mPortalURL, getString(R.string.client_id), mOAuthRedirectURI);
+                AuthenticationManager.addOAuthConfiguration(oauthConfig);
+            } catch (Exception exception) {
+                showErrorAlert(getString(R.string.system_error), "Cannot setup OAuth: " + exception.getLocalizedMessage());
+            }
         }
         try {
             AuthenticationManager.setAuthenticationChallengeHandler(new DefaultAuthenticationChallengeHandler(this));

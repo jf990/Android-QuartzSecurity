@@ -20,7 +20,9 @@ import com.esri.arcgisruntime.portal.PortalQueryResultSet;
 import java.util.List;
 
 /**
- * Created by john8301 on 6/9/16.
+ * PortalItemQueryAdapter is a gridView adapter that uses a PortalQueryResultSet and builds a
+ * gridView display of all the items. Each item has a thumbnail image and a title using
+ * basemap_grid_item.xml
  */
 public class PortalItemQueryAdapter extends BaseAdapter {
 
