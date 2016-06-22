@@ -13,7 +13,7 @@ import android.widget.GridView;
 
 import com.esri.arcgisruntime.concurrent.ListenableFuture;
 import com.esri.arcgisruntime.mapping.Basemap;
-import com.esri.arcgisruntime.mapping.Map;
+import com.esri.arcgisruntime.mapping.ArcGISMap;
 import com.esri.arcgisruntime.mapping.Viewpoint;
 import com.esri.arcgisruntime.mapping.view.MapView;
 import com.esri.arcgisruntime.portal.Portal;
@@ -23,8 +23,10 @@ import com.esri.arcgisruntime.loadable.LoadStatus;
 import com.esri.arcgisruntime.portal.PortalItem;
 import com.esri.arcgisruntime.portal.PortalQueryParams;
 import com.esri.arcgisruntime.portal.PortalQueryResultSet;
+import com.esri.arcgisruntime.security.AuthenticationChallengeResponse;
 import com.esri.arcgisruntime.security.AuthenticationManager;
 import com.esri.arcgisruntime.security.DefaultAuthenticationChallengeHandler;
+import com.esri.arcgisruntime.security.DefaultOAuthIntentReceiver;
 import com.esri.arcgisruntime.security.OAuthConfiguration;
 
 import java.util.List;
@@ -34,7 +36,7 @@ public class MainActivity extends AppCompatActivity {
 
     private MapView mMapView;
     private Portal mArcgisPortal = null;
-    private boolean mUseOAuth = false;
+    private boolean mUseOAuth = true;
     private boolean mUserIsLoggedIn = false;
 
     // Configuration to set at initial load or reset:
@@ -72,7 +74,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         mMapView = (MapView) findViewById(R.id.mapView);
-        Map map = new Map(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
+        ArcGISMap map = new ArcGISMap(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
         mMapView.setMap(map);
         setupChallengeHandler();
     }
@@ -122,6 +124,8 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean loginUser(final LoginCompletionInterface callback) {
         mArcgisPortal = new Portal(mPortalURL, true);
+        mArcgisPortal.loadAsync();
+        // look in DefaultOAuthIntentReceiver
         mArcgisPortal.addDoneLoadingListener(new Runnable() {
             @Override
             public void run() {
@@ -151,7 +155,6 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         });
-        mArcgisPortal.loadAsync();
         return true;
     }
 
@@ -220,7 +223,7 @@ public class MainActivity extends AppCompatActivity {
         if (portalItem != null) {
             mMapViewPoint = mMapView.getCurrentViewpoint(Viewpoint.Type.CENTER_AND_SCALE);
             mMapScale = mMapView.getMapScale();
-            Map newMap = new Map(portalItem);
+            ArcGISMap newMap = new ArcGISMap(portalItem);
             if (newMap != null) {
                 mMapView.setMap(newMap);
                 // position map to where we left off
