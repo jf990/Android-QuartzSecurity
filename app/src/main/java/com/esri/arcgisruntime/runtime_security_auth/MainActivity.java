@@ -23,11 +23,10 @@ import com.esri.arcgisruntime.loadable.LoadStatus;
 import com.esri.arcgisruntime.portal.PortalItem;
 import com.esri.arcgisruntime.portal.PortalQueryParams;
 import com.esri.arcgisruntime.portal.PortalQueryResultSet;
-import com.esri.arcgisruntime.security.AuthenticationChallengeResponse;
 import com.esri.arcgisruntime.security.AuthenticationManager;
 import com.esri.arcgisruntime.security.DefaultAuthenticationChallengeHandler;
-import com.esri.arcgisruntime.security.DefaultOAuthIntentReceiver;
 import com.esri.arcgisruntime.security.OAuthConfiguration;
+import com.esri.arcgisruntime.ArcGISRuntimeException;
 
 import java.util.List;
 
@@ -35,8 +34,9 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     private MapView mMapView;
+    private ArcGISMap mMap;
     private Portal mArcgisPortal = null;
-    private boolean mUseOAuth = true;
+    private boolean mUseOAuth = false;
     private boolean mUserIsLoggedIn = false;
 
     // Configuration to set at initial load or reset:
@@ -44,17 +44,17 @@ public class MainActivity extends AppCompatActivity {
     private double mStartLatitude = 40.7576;
     private double mStartLongitude = -73.9857;
     private int mStartLevelOfDetail = 17;
-    private String mPortalURL = "http://www.arcgis.com";
+    private String mPortalURL = "http://www.arcgis.com/";
     private String mOAuthRedirectURI = "arcgis-runtime-auth://auth"; // https://www.arcgis.com/sharing/oauth2/authorize";
 
     // Configuration to restore on resume, reload:
-    private Viewpoint mMapViewPoint;
+    private Viewpoint mCurrentViewPoint;
     private double mMapScale;
 
     // define callback interface for login completion event
     interface LoginCompletionInterface {
         void onLoginCompleted();
-        void onLoginFailed();
+        void onLoginFailed(int errorCode, String errorMessage);
     }
 
     @Override
@@ -74,8 +74,8 @@ public class MainActivity extends AppCompatActivity {
         });
 
         mMapView = (MapView) findViewById(R.id.mapView);
-        ArcGISMap map = new ArcGISMap(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
-        mMapView.setMap(map);
+        mMap = new ArcGISMap(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
+        mMapView.setMap(mMap);
         setupChallengeHandler();
     }
 
@@ -122,34 +122,56 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
+    /**
+     * Initiate a user login with the portal configured in mPortalURL. Since this is an asynchronous
+     * task, results of the login are reported to LoginCompletionInterface.
+     * @param callback
+     * @return
+     */
     private boolean loginUser(final LoginCompletionInterface callback) {
         mArcgisPortal = new Portal(mPortalURL, true);
         mArcgisPortal.loadAsync();
-        // look in DefaultOAuthIntentReceiver
         mArcgisPortal.addDoneLoadingListener(new Runnable() {
             @Override
             public void run() {
                 final String info;
+                final int errorCode;
                 LoadStatus loadStatus = mArcgisPortal.getLoadStatus();
                 if (loadStatus == LoadStatus.LOADED) {
-                    PortalInfo portalInformation = mArcgisPortal.getPortalInfo();
-                    info = portalInformation.getPortalName() + " for " + portalInformation.getOrganizationName();
+                    // PortalInfo portalInformation = mArcgisPortal.getPortalInfo();
+                    // info = portalInformation.getPortalName() + " for " + portalInformation.getOrganizationName();
+                    info = null;
+                    errorCode = 0;
                     mUserIsLoggedIn = true;
-                    if (callback != null) {
-                        callback.onLoginCompleted();
-                    }
                 } else {
-                    info = "Login failed - but why? cancel? invalid credentials? mPortalURL? bad network? " + loadStatus;
-                    if (callback != null) {
-                        callback.onLoginFailed();
+                    ArcGISRuntimeException loadError = mArcgisPortal.getLoadError();
+                    if (loadError != null) {
+                        errorCode = loadError.getErrorCode();
+                        if (errorCode == 25) {
+                            Throwable loadErrorReason = loadError.getCause();
+                            info = loadErrorReason.getLocalizedMessage();
+                        } else {
+                            info = loadError.getLocalizedMessage();
+                        }
+                    } else {
+                        errorCode = 99999;
+                        info = "Login failed - please try again to continue.";
                     }
                 }
                 invalidateOptionsMenu();
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        if (!isFinishing()){
-                            showErrorAlert(getString(R.string.action_login), info);
+                        if (!isFinishing()) {
+                            if (callback != null) {
+                                if (mUserIsLoggedIn) {
+                                    callback.onLoginCompleted();
+                                } else {
+                                    callback.onLoginFailed(errorCode, info);
+                                }
+                            } else if (!mUserIsLoggedIn) {
+                                showErrorAlert(getString(R.string.action_login), getString(R.string.info_not_logged_in) + info + "(" + errorCode + ")");
+                            }
                         }
                     }
                 });
@@ -219,17 +241,13 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void changeBasemapToPortalItem(PortalItem portalItem) {
+    public void changeBasemapToPortalItem(PortalItem portalItem) {
         if (portalItem != null) {
-            mMapViewPoint = mMapView.getCurrentViewpoint(Viewpoint.Type.CENTER_AND_SCALE);
+            mCurrentViewPoint = mMapView.getCurrentViewpoint(Viewpoint.Type.CENTER_AND_SCALE);
             mMapScale = mMapView.getMapScale();
-            ArcGISMap newMap = new ArcGISMap(portalItem);
-            if (newMap != null) {
-                mMapView.setMap(newMap);
-                // position map to where we left off
-                mMapView.setViewpointAsync(mMapViewPoint);
-                mMapView.setViewpointScaleAsync(mMapScale);
-            }
+            mMap.setBasemap(Basemap.createStreets()); // new Basemap(portalItem));
+            mMapView.setViewpointAsync(mCurrentViewPoint);
+            mMapView.setViewpointScaleAsync(mMapScale);
         }
     }
 
@@ -290,8 +308,8 @@ public class MainActivity extends AppCompatActivity {
             showBasemapSelector();
         }
 
-        public void onLoginFailed() {
-            showErrorAlert(getString(R.string.action_login), "You must login to select available basemaps.");
+        public void onLoginFailed(int errorCode, String errorMessage) {
+            showErrorAlert(getString(R.string.action_login), errorMessage + "(" + errorCode + ") " + getString(R.string.info_login_to_continue));
         }
     };
 

@@ -4,6 +4,8 @@
     <string name="action_logout">Logout</string>
     <string name="action_OK">OK</string>
     <string name="title_select_basemap">Select a basemap</string>
+    <string name="info_login_to_continue">You must login to select available basemaps.</string>
+    <string name="info_not_logged_in">You are not logged in.</string>
     <string name="system_error">System error</string>
     <string name="client_id">OOraRX2FZx7X6cTs</string>
 </resources>

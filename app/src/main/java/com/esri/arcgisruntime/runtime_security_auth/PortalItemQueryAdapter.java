@@ -50,12 +50,10 @@ public class PortalItemQueryAdapter extends BaseAdapter {
 
         if (convertView == null) {
             gridView = inflater.inflate(R.layout.basemap_grid_item, null);
-            TextView textView = (TextView) gridView
-                    .findViewById(R.id.textViewMap);
+            TextView textView = (TextView) gridView.findViewById(R.id.textViewMap);
             textView.setText(portalItem.getTitle());
-            final ImageView imageView = (ImageView) gridView
-                    .findViewById(R.id.imageViewMap);
-            if (portalItem.getThumbnailFileName() != null) {
+            final ImageView imageView = (ImageView) gridView.findViewById(R.id.imageViewMap);
+            if (imageView != null && portalItem.getThumbnailFileName() != null) {
                 final ListenableFuture<byte[]> itemThumbnailDataFuture = portalItem.fetchThumbnailAsync();
                 itemThumbnailDataFuture.addDoneListener(new Runnable() {
                     @Override
@@ -70,9 +68,7 @@ public class PortalItemQueryAdapter extends BaseAdapter {
                                         @Override
                                         public void run() {
                                             // TODO: map image view to component in view
-                                            if (imageView != null) {
-                                                imageView.setImageBitmap(drawable.getBitmap());
-                                            }
+                                            imageView.setImageBitmap(drawable.getBitmap());
                                         }
                                     });
                                 }
