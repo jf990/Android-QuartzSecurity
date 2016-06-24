@@ -54,6 +54,11 @@ public class PortalItemQueryAdapter extends BaseAdapter {
             final ImageView imageView = (ImageView) gridViewCell.findViewById(R.id.imageViewMap);
             if (imageView != null && portalItem.getThumbnailFileName() != null) {
                 final ListenableFuture<byte[]> itemThumbnailDataFuture = portalItem.fetchThumbnailAsync();
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    Log.d("Basemaps query", "Thread sleep fails");
+                }
                 itemThumbnailDataFuture.addDoneListener(new Runnable() {
                     @Override
                     public void run() {
