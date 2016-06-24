@@ -6,6 +6,12 @@
     <string name="title_select_basemap">Select a basemap</string>
     <string name="info_login_to_continue">You must login to select available basemaps.</string>
     <string name="info_not_logged_in">You are not logged in.</string>
+    <string name="err_login_failed">Login failed - please try again to continue.</string>
+    <string name="err_cannot_load_query">Cannot load portal query results. </string>
+    <string name="err_cannot_load_item">Cannot load portal Item.</string>
+    <string name="err_cannot_query_portal">Cannot query portal. </string>
+    <string name="err_cannot_create_object">Cannot create a required object. </string>
+    <string name="err_cannot_load_layer">Cannot load the required layer.</string>
     <string name="system_error">System error</string>
     <string name="client_id">OOraRX2FZx7X6cTs</string>
 </resources>

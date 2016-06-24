@@ -26,33 +26,31 @@ import java.util.List;
  */
 public class PortalItemQueryAdapter extends BaseAdapter {
 
-    private Context context;
-    private Activity activity;
-    private PortalQueryResultSet<PortalItem> portalResultSet;
-    private List<PortalItem> portalResults;
+    private Context mContext;
+    private Activity mActivity;
+    private List<PortalItem> mPortalResults;
 
     public PortalItemQueryAdapter(Context context, Activity activity, PortalQueryResultSet<PortalItem> portalResultSet) {
-        this.context = context;
-        this.activity = activity;
-        this.portalResultSet = portalResultSet;
-        this.portalResults = portalResultSet.getResults();
+        mContext = context;
+        mActivity = activity;
+        mPortalResults = portalResultSet.getResults();
     }
 
     public View getView(int position, View convertView, ViewGroup parent) {
 
-        if (position > portalResults.size()) {
+        if (position > mPortalResults.size()) {
             return null;
         }
-        LayoutInflater inflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        View gridView;
-        final PortalItem portalItem = portalResults.get(position);
-        boolean errorLoadingImage = false;
+        View gridViewCell;
 
         if (convertView == null) {
-            gridView = inflater.inflate(R.layout.basemap_grid_item, null);
-            TextView textView = (TextView) gridView.findViewById(R.id.textViewMap);
+            boolean errorLoadingImage = false;
+            final PortalItem portalItem = mPortalResults.get(position);
+            LayoutInflater inflater = (LayoutInflater) mContext.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+            gridViewCell = inflater.inflate(R.layout.basemap_grid_item, null);
+            TextView textView = (TextView) gridViewCell.findViewById(R.id.textViewMap);
             textView.setText(portalItem.getTitle());
-            final ImageView imageView = (ImageView) gridView.findViewById(R.id.imageViewMap);
+            final ImageView imageView = (ImageView) gridViewCell.findViewById(R.id.imageViewMap);
             if (imageView != null && portalItem.getThumbnailFileName() != null) {
                 final ListenableFuture<byte[]> itemThumbnailDataFuture = portalItem.fetchThumbnailAsync();
                 itemThumbnailDataFuture.addDoneListener(new Runnable() {
@@ -62,12 +60,11 @@ public class PortalItemQueryAdapter extends BaseAdapter {
                             byte[] itemThumbnailData = itemThumbnailDataFuture.get();
                             if ((itemThumbnailData != null) && (itemThumbnailData.length > 0)) {
                                 Bitmap itemThumbnail = BitmapFactory.decodeByteArray(itemThumbnailData, 0, itemThumbnailData.length);
-                                final BitmapDrawable drawable = new BitmapDrawable(context.getResources(), itemThumbnail);
+                                final BitmapDrawable drawable = new BitmapDrawable(mContext.getResources(), itemThumbnail);
                                 if (drawable != null) {
-                                    activity.runOnUiThread(new Runnable() {
+                                    mActivity.runOnUiThread(new Runnable() {
                                         @Override
                                         public void run() {
-                                            // TODO: map image view to component in view
                                             imageView.setImageBitmap(drawable.getBitmap());
                                         }
                                     });
@@ -83,20 +80,20 @@ public class PortalItemQueryAdapter extends BaseAdapter {
                 imageView.setImageResource(R.drawable.no_thumbnail);
             }
         } else {
-            gridView = convertView;
+            gridViewCell = convertView;
         }
-        return gridView;
+        return gridViewCell;
     }
 
     @Override
     public int getCount() {
-        return portalResults.size();
+        return mPortalResults.size();
     }
 
     @Override
     public Object getItem(int position) {
-        if (position < portalResults.size()) {
-            return portalResults.get(position);
+        if (position < mPortalResults.size()) {
+            return mPortalResults.get(position);
         } else {
             return null;
         }

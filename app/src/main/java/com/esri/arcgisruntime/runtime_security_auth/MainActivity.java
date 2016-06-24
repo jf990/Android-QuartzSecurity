@@ -11,22 +11,26 @@ import android.view.MenuItem;
 import android.widget.AdapterView;
 import android.widget.GridView;
 
+import com.esri.arcgisruntime.ArcGISRuntimeException;
 import com.esri.arcgisruntime.concurrent.ListenableFuture;
+import com.esri.arcgisruntime.datasource.arcgis.ServiceFeatureTable;
+import com.esri.arcgisruntime.loadable.LoadStatus;
+import com.esri.arcgisruntime.layers.FeatureLayer;
 import com.esri.arcgisruntime.mapping.Basemap;
 import com.esri.arcgisruntime.mapping.ArcGISMap;
+import com.esri.arcgisruntime.mapping.LayerList;
 import com.esri.arcgisruntime.mapping.Viewpoint;
 import com.esri.arcgisruntime.mapping.view.MapView;
 import com.esri.arcgisruntime.portal.Portal;
 import com.esri.arcgisruntime.portal.PortalGroup;
 import com.esri.arcgisruntime.portal.PortalInfo;
-import com.esri.arcgisruntime.loadable.LoadStatus;
 import com.esri.arcgisruntime.portal.PortalItem;
+import com.esri.arcgisruntime.portal.PortalItemType;
 import com.esri.arcgisruntime.portal.PortalQueryParams;
 import com.esri.arcgisruntime.portal.PortalQueryResultSet;
 import com.esri.arcgisruntime.security.AuthenticationManager;
 import com.esri.arcgisruntime.security.DefaultAuthenticationChallengeHandler;
 import com.esri.arcgisruntime.security.OAuthConfiguration;
-import com.esri.arcgisruntime.ArcGISRuntimeException;
 
 import java.util.List;
 
@@ -36,16 +40,22 @@ public class MainActivity extends AppCompatActivity {
     private MapView mMapView;
     private ArcGISMap mMap;
     private Portal mArcgisPortal = null;
+    private FeatureLayer mFeatureLayer;
+    private PortalQueryResultSet<PortalItem> mPortalResultSet = null;
+    private int mNextBasemap = 0;
     private boolean mUseOAuth = false;
     private boolean mUserIsLoggedIn = false;
+    private boolean mLoadedFeatureService = false;
 
     // Configuration to set at initial load or reset:
     private Basemap.Type mStartBasemapType = Basemap.Type.IMAGERY_WITH_LABELS;
     private double mStartLatitude = 40.7576;
     private double mStartLongitude = -73.9857;
-    private int mStartLevelOfDetail = 17;
+    private int mStartLevelOfDetail = 12;
     private String mPortalURL = "http://www.arcgis.com/";
     private String mOAuthRedirectURI = "arcgis-runtime-auth://auth"; // https://www.arcgis.com/sharing/oauth2/authorize";
+    private String mLayerItemId = "7995c5a997d248549e563178ad25c3e1";
+    private String mLayerServiceURL = "http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer";
 
     // Configuration to restore on resume, reload:
     private Viewpoint mCurrentViewPoint;
@@ -75,6 +85,7 @@ public class MainActivity extends AppCompatActivity {
 
         mMapView = (MapView) findViewById(R.id.mapView);
         mMap = new ArcGISMap(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
+        loadLayerWithService(mLayerServiceURL);
         mMapView.setMap(mMap);
         setupChallengeHandler();
     }
@@ -129,8 +140,9 @@ public class MainActivity extends AppCompatActivity {
      * @return
      */
     private boolean loginUser(final LoginCompletionInterface callback) {
-        mArcgisPortal = new Portal(mPortalURL, true);
-        mArcgisPortal.loadAsync();
+        if (mArcgisPortal == null) {
+            mArcgisPortal = new Portal(mPortalURL, true);
+        }
         mArcgisPortal.addDoneLoadingListener(new Runnable() {
             @Override
             public void run() {
@@ -155,7 +167,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                     } else {
                         errorCode = 99999;
-                        info = "Login failed - please try again to continue.";
+                        info = getString(R.string.err_login_failed);
                     }
                 }
                 invalidateOptionsMenu();
@@ -177,6 +189,7 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         });
+        mArcgisPortal.loadAsync();
         return true;
     }
 
@@ -202,10 +215,15 @@ public class MainActivity extends AppCompatActivity {
         try {
             AuthenticationManager.setAuthenticationChallengeHandler(new DefaultAuthenticationChallengeHandler(this));
         } catch (Exception exception) {
-            showErrorAlert(getString(R.string.system_error), "Cannot create a required object. " + exception.getLocalizedMessage());
+            showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_create_object) + exception.getLocalizedMessage());
         }
     }
 
+    /**
+     * Show a popup dialog of a grid containing the results of a Portal query result.
+     * @param portalResultSet A set of PortalItems, Each item is displayed in a grid cell showing
+     *                        thumbnail and title.
+     */
     private void showGridDialog(final PortalQueryResultSet<PortalItem> portalResultSet) {
         GridView gridView = new GridView(this);
         final AlertDialog gridViewAlertDialog;
@@ -224,7 +242,6 @@ public class MainActivity extends AppCompatActivity {
         gridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                // TODO: get which map was selected
                 if (position >= 0 && position < portalResultSet.getTotalResults()) {
                     List<PortalItem> portalResults = portalResultSet.getResults();
                     if (portalResults != null) {
@@ -241,16 +258,70 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    public void changeBasemapToPortalItem(PortalItem portalItem) {
-        if (portalItem != null) {
+    /**
+     * Set the basemap to a portal item (as long as it is a WEBMAP)
+     * If the item is not loaded we attempt to load it
+     * @param portalItem
+     */
+    public void changeBasemapToPortalItem(final PortalItem portalItem) {
+        if (portalItem != null && portalItem.getType() == PortalItemType.WEBMAP) {
             mCurrentViewPoint = mMapView.getCurrentViewpoint(Viewpoint.Type.CENTER_AND_SCALE);
             mMapScale = mMapView.getMapScale();
-            mMap.setBasemap(Basemap.createStreets()); // new Basemap(portalItem));
-            mMapView.setViewpointAsync(mCurrentViewPoint);
-            mMapView.setViewpointScaleAsync(mMapScale);
+            portalItem.addDoneLoadingListener(new Runnable() {
+                @Override
+                public void run() {
+                    LoadStatus loadStatus = portalItem.getLoadStatus();
+                    if (loadStatus == LoadStatus.LOADED) {
+                        mMap.setBasemap(new Basemap(portalItem));
+                        mMapView.setViewpointAsync(mCurrentViewPoint);
+                        mMapView.setViewpointScaleAsync(mMapScale);
+                    } else {
+                        ArcGISRuntimeException loadError = portalItem.getLoadError();
+                        showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_load_item) + " " + loadError.getLocalizedMessage());
+                    }
+                }
+            });
+            portalItem.loadAsync();
         }
     }
 
+    /**
+     * This method cycles through 6 standard basemaps.
+     */
+    public void changeBasemapToBasemapType() {
+        Basemap newBasemap;
+        mCurrentViewPoint = mMapView.getCurrentViewpoint(Viewpoint.Type.CENTER_AND_SCALE);
+        mMapScale = mMapView.getMapScale();
+        mNextBasemap = (mNextBasemap + 1) % 6;
+        switch(mNextBasemap) {
+            case 0:
+                newBasemap = Basemap.createImageryWithLabels();
+                break;
+            case 1:
+                newBasemap = Basemap.createStreets();
+                break;
+            case 2:
+                newBasemap = Basemap.createLightGrayCanvas();
+                break;
+            case 3:
+                newBasemap = Basemap.createNationalGeographic();
+                break;
+            case 4:
+                newBasemap = Basemap.createTopographic();
+                break;
+            default:
+                newBasemap = Basemap.createImagery();
+                break;
+        }
+        mMap.setBasemap(newBasemap);
+        mMapView.setViewpointAsync(mCurrentViewPoint);
+        mMapView.setViewpointScaleAsync(mMapScale);
+    }
+
+    /**
+     * Query the Portal for a list of available basemaps. When the result set comes back we
+     * display the results in a popup dialog grid.
+     */
     private void showBasemapSelector() {
         if (mArcgisPortal == null) {
             // if we arrived here yet not logged in then some logic is wrong.
@@ -273,18 +344,30 @@ public class MainActivity extends AppCompatActivity {
                         @Override
                         public void run() {
                             try {
-                                PortalQueryResultSet<PortalItem> portalResultSet = contentFuture.get();
-                                showGridDialog(portalResultSet);
+                                mPortalResultSet = contentFuture.get();
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        showGridDialog(mPortalResultSet);
+                                    }
+                                });
                             } catch (Exception exception) {
-                                showErrorAlert(getString(R.string.system_error), "Cannot load portal query results. " + exception.getLocalizedMessage());
+                                showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_load_query) + exception.getLocalizedMessage());
                             }
                         }
                     });
                 } catch (Exception exception) {
-                    showErrorAlert(getString(R.string.system_error), "Cannot query portal. " + exception.getLocalizedMessage());
+                    showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_query_portal) + exception.getLocalizedMessage());
                 }
             }
         });
+    }
+
+    private void loadLayerWithService(String serviceURL) {
+        ServiceFeatureTable serviceFeatureTable = new ServiceFeatureTable(serviceURL);
+        mFeatureLayer = new FeatureLayer(serviceFeatureTable);
+        mMap.getOperationalLayers().add(mFeatureLayer);
+        mLoadedFeatureService = true;
     }
 
     /**
