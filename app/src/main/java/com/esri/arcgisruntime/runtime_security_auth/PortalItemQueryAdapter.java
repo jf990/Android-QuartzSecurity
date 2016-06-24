@@ -31,8 +31,9 @@ public class PortalItemQueryAdapter extends BaseAdapter {
     private List<PortalItem> mPortalResults;
 
     public PortalItemQueryAdapter(Context context, Activity activity, PortalQueryResultSet<PortalItem> portalResultSet) {
-        mContext = context;
+//        mContext = context;
         mActivity = activity;
+        mContext = activity.getBaseContext();
         mPortalResults = portalResultSet.getResults();
     }
 

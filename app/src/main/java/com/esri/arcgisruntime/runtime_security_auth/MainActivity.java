@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.util.Log;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -43,6 +44,7 @@ public class MainActivity extends AppCompatActivity {
     private FeatureLayer mFeatureLayer;
     private PortalQueryResultSet<PortalItem> mPortalResultSet = null;
     private int mNextBasemap = 0;
+    private boolean mShowErrors = true;
     private boolean mUseOAuth = false;
     private boolean mUserIsLoggedIn = false;
     private boolean mLoadedFeatureService = false;
@@ -53,9 +55,9 @@ public class MainActivity extends AppCompatActivity {
     private double mStartLongitude = -73.9857;
     private int mStartLevelOfDetail = 12;
     private String mPortalURL = "http://www.arcgis.com/";
-    private String mOAuthRedirectURI = "arcgis-runtime-auth://auth"; // https://www.arcgis.com/sharing/oauth2/authorize";
+    private String mOAuthRedirectURI = "arcgis-runtime-auth://auth";
     private String mLayerItemId = "7995c5a997d248549e563178ad25c3e1";
-    private String mLayerServiceURL = "http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer";
+    private String mLayerServiceURL = "http://runtime.maps.arcgis.com/sharing/rest/content/items/7995c5a997d248549e563178ad25c3e1/data"; // http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer";
 
     // Configuration to restore on resume, reload:
     private Viewpoint mCurrentViewPoint;
@@ -85,7 +87,7 @@ public class MainActivity extends AppCompatActivity {
 
         mMapView = (MapView) findViewById(R.id.mapView);
         mMap = new ArcGISMap(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
-        loadLayerWithService(mLayerServiceURL);
+        // loadLayerWithService(mLayerServiceURL);
         mMapView.setMap(mMap);
         setupChallengeHandler();
     }
@@ -131,6 +133,26 @@ public class MainActivity extends AppCompatActivity {
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    /**
+     * Set a default challenge handler provided by the SDK. We could implement our own by
+     * deriving from the arcgisruntime.security.AuthenticationChallengeHandler interface.
+     */
+    private void setupChallengeHandler() {
+        if (mUseOAuth) {
+            try {
+                OAuthConfiguration oauthConfig = new OAuthConfiguration(mPortalURL, getString(R.string.client_id), mOAuthRedirectURI);
+                AuthenticationManager.addOAuthConfiguration(oauthConfig);
+            } catch (Exception exception) {
+                showErrorAlert(getString(R.string.system_error), "Cannot setup OAuth: " + exception.getLocalizedMessage());
+            }
+        }
+        try {
+            AuthenticationManager.setAuthenticationChallengeHandler(new DefaultAuthenticationChallengeHandler(this));
+        } catch (Exception exception) {
+            showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_create_object) + exception.getLocalizedMessage());
+        }
     }
 
     /**
@@ -193,30 +215,16 @@ public class MainActivity extends AppCompatActivity {
         return true;
     }
 
+    /**
+     * Logout is called from the menu. After logout the state is set to logged out so we can then
+     * log in as a different user.
+     * @return
+     */
     private boolean logoutUser() {
+        AuthenticationManager.CredentialCache.clear();
         mUserIsLoggedIn = false;
         invalidateOptionsMenu();
         return true;
-    }
-
-    /**
-     * Set a default challenge handler provided by the SDK. We could implement our own by
-     * deriving from the arcgisruntime.security.AuthenticationChallengeHandler interface.
-     */
-    private void setupChallengeHandler() {
-        if (mUseOAuth) {
-            try {
-                OAuthConfiguration oauthConfig = new OAuthConfiguration(mPortalURL, getString(R.string.client_id), mOAuthRedirectURI);
-                AuthenticationManager.addOAuthConfiguration(oauthConfig);
-            } catch (Exception exception) {
-                showErrorAlert(getString(R.string.system_error), "Cannot setup OAuth: " + exception.getLocalizedMessage());
-            }
-        }
-        try {
-            AuthenticationManager.setAuthenticationChallengeHandler(new DefaultAuthenticationChallengeHandler(this));
-        } catch (Exception exception) {
-            showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_create_object) + exception.getLocalizedMessage());
-        }
     }
 
     /**
@@ -363,11 +371,55 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * Load a feature layer given a feature service URL.
+     * @param serviceURL String The URL pointing to the feature service (from ArcGIS Online.)
+     */
     private void loadLayerWithService(String serviceURL) {
         ServiceFeatureTable serviceFeatureTable = new ServiceFeatureTable(serviceURL);
         mFeatureLayer = new FeatureLayer(serviceFeatureTable);
         mMap.getOperationalLayers().add(mFeatureLayer);
         mLoadedFeatureService = true;
+    }
+
+    /**
+     * Load a feature service given its item id (from ArcGIS Online.)
+     * @param itemId String the item id of the feature layer
+     */
+    private void loadLayerWithItem (String itemId) {
+        if (itemId != null && mMap != null && mArcgisPortal != null) {
+            try {
+                final PortalItem portalItem = new PortalItem(mArcgisPortal, itemId);
+                if (portalItem != null) {
+                    portalItem.addDoneLoadingListener(new Runnable() {
+                        @Override
+                        public void run() {
+                            LoadStatus loadStatus = portalItem.getLoadStatus();
+                            if (loadStatus == LoadStatus.LOADED) {
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        FeatureLayer featureLayer = new FeatureLayer(portalItem, 0);
+                                        LayerList layerList = mMap.getOperationalLayers();
+                                        if (layerList != null) {
+                                            layerList.add(featureLayer);
+                                        }
+                                    }
+                                });
+                            } else {
+                                ArcGISRuntimeException loadError = portalItem.getLoadError();
+                                showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_load_layer) + " " + loadError.getLocalizedMessage());
+                            }
+                        }
+                    });
+                    portalItem.loadAsync();
+                }
+            } catch (ArcGISRuntimeException exception) {
+                Log.d("loadLayerWithItem", "Runtime exception " + exception.getLocalizedMessage());
+            }
+        } else {
+            Log.d("loadLayerWithItem", "missing required parameter");
+        }
     }
 
     /**
@@ -388,6 +440,7 @@ public class MainActivity extends AppCompatActivity {
      */
     private final LoginCompletionInterface loginCompletionCallback = new LoginCompletionInterface () {
         public void onLoginCompleted() {
+            loadLayerWithItem(mLayerItemId);
             showBasemapSelector();
         }
 
@@ -402,12 +455,15 @@ public class MainActivity extends AppCompatActivity {
      * @param errorMessage String A string to use for the message to display.
      */
     private void showErrorAlert (String errorTitle, String errorMessage) {
-        AlertDialog.Builder alertDialog = new AlertDialog.Builder(MainActivity.this);
-        alertDialog.setTitle(errorTitle);
-        alertDialog.setMessage(errorMessage);
-        alertDialog.setCancelable(true);
-        alertDialog.setNegativeButton(R.string.action_OK, null);
-        AlertDialog alertDialogInstance = alertDialog.create();
-        alertDialogInstance.show();
+        Log.d(errorTitle, errorMessage);
+        if (mShowErrors) {
+            AlertDialog.Builder alertDialog = new AlertDialog.Builder(MainActivity.this);
+            alertDialog.setTitle(errorTitle);
+            alertDialog.setMessage(errorMessage);
+            alertDialog.setCancelable(true);
+            alertDialog.setNegativeButton(R.string.action_OK, null);
+            AlertDialog alertDialogInstance = alertDialog.create();
+            alertDialogInstance.show();
+        }
     }
 }
