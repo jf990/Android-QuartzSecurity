@@ -57,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
     private String mPortalURL = "http://www.arcgis.com/";
     private String mOAuthRedirectURI = "arcgis-runtime-auth://auth";
     private String mLayerItemId = "7995c5a997d248549e563178ad25c3e1";
-    private String mLayerServiceURL = "http://runtime.maps.arcgis.com/sharing/rest/content/items/7995c5a997d248549e563178ad25c3e1/data"; // http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer";
+    private String mLayerServiceURL = "http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0"; // http://runtime.maps.arcgis.com/sharing/rest/content/items/7995c5a997d248549e563178ad25c3e1/data"; // http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0";
 
     // Configuration to restore on resume, reload:
     private Viewpoint mCurrentViewPoint;
@@ -87,7 +87,7 @@ public class MainActivity extends AppCompatActivity {
 
         mMapView = (MapView) findViewById(R.id.mapView);
         mMap = new ArcGISMap(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
-        // loadLayerWithService(mLayerServiceURL);
+        loadLayerWithService(mLayerServiceURL);
         mMapView.setMap(mMap);
         setupChallengeHandler();
     }

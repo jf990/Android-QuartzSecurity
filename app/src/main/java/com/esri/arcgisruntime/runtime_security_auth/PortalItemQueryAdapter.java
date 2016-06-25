@@ -39,6 +39,10 @@ public class PortalItemQueryAdapter extends BaseAdapter {
 
     public View getView(int position, View convertView, ViewGroup parent) {
 
+        // use Android adapter pattern basemap adapter, basemap item, image adapter pattern
+        // maps-app-android, drawitems
+        // arcgis-runtime-demos-android MaterialBasemaps
+
         if (position > mPortalResults.size()) {
             return null;
         }
@@ -54,11 +58,7 @@ public class PortalItemQueryAdapter extends BaseAdapter {
             final ImageView imageView = (ImageView) gridViewCell.findViewById(R.id.imageViewMap);
             if (imageView != null && portalItem.getThumbnailFileName() != null) {
                 final ListenableFuture<byte[]> itemThumbnailDataFuture = portalItem.fetchThumbnailAsync();
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    Log.d("Basemaps query", "Thread sleep fails");
-                }
+                threadDelay();
                 itemThumbnailDataFuture.addDoneListener(new Runnable() {
                     @Override
                     public void run() {
@@ -89,6 +89,14 @@ public class PortalItemQueryAdapter extends BaseAdapter {
             gridViewCell = convertView;
         }
         return gridViewCell;
+    }
+
+    private void threadDelay() {
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Log.d("Basemaps query", "Thread sleep fails");
+        }
     }
 
     @Override
