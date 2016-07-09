@@ -45,7 +45,7 @@ public class MainActivity extends AppCompatActivity {
     private PortalQueryResultSet<PortalItem> mPortalResultSet = null;
     private int mNextBasemap = 0;
     private boolean mShowErrors = true;
-    private boolean mUseOAuth = false;
+    private boolean mUseOAuth = true;
     private boolean mUserIsLoggedIn = false;
     private boolean mLoadedFeatureService = false;
 
@@ -56,6 +56,7 @@ public class MainActivity extends AppCompatActivity {
     private int mStartLevelOfDetail = 12;
     private String mPortalURL = "http://www.arcgis.com/";
     private String mOAuthRedirectURI = "arcgis-runtime-auth://auth";
+    private String mClientId = "OOraRX2FZx7X6cTs";
     private String mLayerItemId = "7995c5a997d248549e563178ad25c3e1";
     private String mLayerServiceURL = "http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0"; // http://runtime.maps.arcgis.com/sharing/rest/content/items/7995c5a997d248549e563178ad25c3e1/data"; // http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0";
 
@@ -87,8 +88,8 @@ public class MainActivity extends AppCompatActivity {
 
         mMapView = (MapView) findViewById(R.id.mapView);
         mMap = new ArcGISMap(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
-        loadLayerWithService(mLayerServiceURL);
         mMapView.setMap(mMap);
+        loadLayerWithService(mLayerServiceURL);
         setupChallengeHandler();
     }
 
@@ -142,10 +143,10 @@ public class MainActivity extends AppCompatActivity {
     private void setupChallengeHandler() {
         if (mUseOAuth) {
             try {
-                OAuthConfiguration oauthConfig = new OAuthConfiguration(mPortalURL, getString(R.string.client_id), mOAuthRedirectURI);
+                OAuthConfiguration oauthConfig = new OAuthConfiguration(mPortalURL, mClientId, mOAuthRedirectURI);
                 AuthenticationManager.addOAuthConfiguration(oauthConfig);
             } catch (Exception exception) {
-                showErrorAlert(getString(R.string.system_error), "Cannot setup OAuth: " + exception.getLocalizedMessage());
+                showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_create_oauth) + exception.getLocalizedMessage());
             }
         }
         try {
@@ -394,22 +395,7 @@ public class MainActivity extends AppCompatActivity {
                     portalItem.addDoneLoadingListener(new Runnable() {
                         @Override
                         public void run() {
-                            LoadStatus loadStatus = portalItem.getLoadStatus();
-                            if (loadStatus == LoadStatus.LOADED) {
-                                runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        FeatureLayer featureLayer = new FeatureLayer(portalItem, 0);
-                                        LayerList layerList = mMap.getOperationalLayers();
-                                        if (layerList != null) {
-                                            layerList.add(featureLayer);
-                                        }
-                                    }
-                                });
-                            } else {
-                                ArcGISRuntimeException loadError = portalItem.getLoadError();
-                                showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_load_layer) + " " + loadError.getLocalizedMessage());
-                            }
+                            layerLoaded(portalItem);
                         }
                     });
                     portalItem.loadAsync();
@@ -419,6 +405,29 @@ public class MainActivity extends AppCompatActivity {
             }
         } else {
             Log.d("loadLayerWithItem", "missing required parameter");
+        }
+    }
+
+    /**
+     * Handle processing the result of async load of a portal item that is a layer.
+     * @param portalItem
+     */
+    private void layerLoaded (final PortalItem portalItem) {
+        LoadStatus loadStatus = portalItem.getLoadStatus();
+        if (loadStatus == LoadStatus.LOADED) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    FeatureLayer featureLayer = new FeatureLayer(portalItem, 0);
+                    LayerList layerList = mMap.getOperationalLayers();
+                    if (layerList != null) {
+                        layerList.add(featureLayer);
+                    }
+                }
+            });
+        } else {
+            ArcGISRuntimeException loadError = portalItem.getLoadError();
+            showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_load_layer) + " " + loadError.getLocalizedMessage());
         }
     }
 
