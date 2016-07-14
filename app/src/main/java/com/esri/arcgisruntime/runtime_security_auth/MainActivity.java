@@ -1,6 +1,11 @@
+/**
+ * MainActivity for the ArcGIS Runtime Security application framework.
+ */
+
 package com.esri.arcgisruntime.runtime_security_auth;
 
 import android.app.AlertDialog;
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AppCompatActivity;
@@ -11,9 +16,10 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.AdapterView;
 import android.widget.GridView;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 import com.esri.arcgisruntime.ArcGISRuntimeException;
-import com.esri.arcgisruntime.concurrent.ListenableFuture;
 import com.esri.arcgisruntime.datasource.arcgis.ServiceFeatureTable;
 import com.esri.arcgisruntime.loadable.LoadStatus;
 import com.esri.arcgisruntime.layers.FeatureLayer;
@@ -23,31 +29,32 @@ import com.esri.arcgisruntime.mapping.LayerList;
 import com.esri.arcgisruntime.mapping.Viewpoint;
 import com.esri.arcgisruntime.mapping.view.MapView;
 import com.esri.arcgisruntime.portal.Portal;
-import com.esri.arcgisruntime.portal.PortalGroup;
-import com.esri.arcgisruntime.portal.PortalInfo;
 import com.esri.arcgisruntime.portal.PortalItem;
 import com.esri.arcgisruntime.portal.PortalItemType;
-import com.esri.arcgisruntime.portal.PortalQueryParams;
 import com.esri.arcgisruntime.portal.PortalQueryResultSet;
 import com.esri.arcgisruntime.security.AuthenticationManager;
 import com.esri.arcgisruntime.security.DefaultAuthenticationChallengeHandler;
 import com.esri.arcgisruntime.security.OAuthConfiguration;
 
+import java.util.ArrayList;
 import java.util.List;
 
 
 public class MainActivity extends AppCompatActivity {
 
-    private MapView mMapView;
-    private ArcGISMap mMap;
+    private MapView mMapView = null;
+    private GridView mBasemapGridView = null;
+    private ArcGISMap mMap = null;
     private Portal mArcgisPortal = null;
     private FeatureLayer mFeatureLayer;
-    private PortalQueryResultSet<PortalItem> mPortalResultSet = null;
+    private ArrayList<BasemapItem> mBasemapList = null; // maintain a cache of the basemaps we discover
     private int mNextBasemap = 0;
     private boolean mShowErrors = true;
     private boolean mUseOAuth = true;
     private boolean mUserIsLoggedIn = false;
     private boolean mLoadedFeatureService = false;
+    private boolean mLoadImagesSerial = true;
+    private int mThumbnailsRequested = 0;
 
     // Configuration to set at initial load or reset:
     private Basemap.Type mStartBasemapType = Basemap.Type.IMAGERY_WITH_LABELS;
@@ -58,16 +65,26 @@ public class MainActivity extends AppCompatActivity {
     private String mOAuthRedirectURI = "arcgis-runtime-auth://auth";
     private String mClientId = "OOraRX2FZx7X6cTs";
     private String mLayerItemId = "7995c5a997d248549e563178ad25c3e1";
-    private String mLayerServiceURL = "http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0"; // http://runtime.maps.arcgis.com/sharing/rest/content/items/7995c5a997d248549e563178ad25c3e1/data"; // http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0";
+    private String mLayerServiceURL = "http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0";
 
     // Configuration to restore on resume, reload:
     private Viewpoint mCurrentViewPoint;
     private double mMapScale;
 
-    // define callback interface for login completion event
+    /**
+     * Define a delegation interface for the login completion event
+     */
     interface LoginCompletionInterface {
         void onLoginCompleted();
         void onLoginFailed(int errorCode, String errorMessage);
+    }
+
+    /**
+     * Define a delegation interface for asynchronous loading of thumbnails from the portal.
+     */
+    public interface BasemapFetchTaskComplete {
+        void onBasemapFetchCompleted(final PortalQueryResultSet<PortalItem> portalResultSet);
+        void onBasemapFetchFailed(String errorMessage);
     }
 
     @Override
@@ -79,13 +96,18 @@ public class MainActivity extends AppCompatActivity {
 
         // setup the Map button
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                onClickMapButton(view);
+        if (fab != null) {
+            try {
+                fab.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        onClickMapButton(view);
+                    }
+                });
+            } catch (Exception exception) {
+                Log.d("MENU-BUTTON", "Canot create instance of FloatingActionButton");
             }
-        });
-
+        }
         mMapView = (MapView) findViewById(R.id.mapView);
         mMap = new ArcGISMap(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
         mMapView.setMap(mMap);
@@ -159,7 +181,7 @@ public class MainActivity extends AppCompatActivity {
     /**
      * Initiate a user login with the portal configured in mPortalURL. Since this is an asynchronous
      * task, results of the login are reported to LoginCompletionInterface.
-     * @param callback
+     * @param callback use the LoginCompletionInterface to report the result of the login and continue.
      * @return
      */
     private boolean loginUser(final LoginCompletionInterface callback) {
@@ -229,15 +251,50 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Show a popup dialog of a grid containing the results of a Portal query result.
-     * @param portalResultSet A set of PortalItems, Each item is displayed in a grid cell showing
-     *                        thumbnail and title.
+     * Iterate the portal query result set and build a cache of the portal items. Also start
+     * the fetch of each item's thumbnail.
+     * @param portalResultSet
      */
-    private void showGridDialog(final PortalQueryResultSet<PortalItem> portalResultSet) {
+    private void buildPortalItemCache(final PortalQueryResultSet<PortalItem> portalResultSet) {
+        if (portalResultSet != null) {
+            List<PortalItem> queryResults = portalResultSet.getResults();
+            if (queryResults != null && ! queryResults.isEmpty()) {
+                if (mBasemapList == null) {
+                    mBasemapList = new ArrayList<>(queryResults.size());
+                } else if ( ! mBasemapList.isEmpty()) {
+                    mBasemapList.clear();
+                }
+                for (int index = 0; index < queryResults.size(); index ++) {
+                    PortalItem portalItem = queryResults.get(index);
+                    BasemapItem basemapItem = new BasemapItem(index, portalItem);
+                    if (basemapItem != null) {
+                        mThumbnailsRequested ++;
+                        if ((mLoadImagesSerial && index == 0) || ! mLoadImagesSerial) {
+                            basemapItem.loadImage(imageLoadedCompletionInterface);
+                        }
+                        mBasemapList.add(basemapItem);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Show a popup dialog of a grid containing the results of a Portal query result. This function
+     * assumes the base map list mBasemapList was previously assembled.
+     */
+    private void showGridDialog() {
+        if (mBasemapGridView != null) {
+            return; // currently showing
+        }
+        if (mBasemapList == null || mBasemapList.size() < 1) {
+            showErrorAlert(getString(R.string.sequence_error), getString(R.string.err_no_items));
+            return;
+        }
         GridView gridView = new GridView(this);
         final AlertDialog gridViewAlertDialog;
 
-        gridView.setAdapter(new PortalItemQueryAdapter(getApplicationContext(), MainActivity.this, portalResultSet));
+        gridView.setAdapter(new PortalItemQueryAdapter(MainActivity.this, mBasemapList));
         gridView.setNumColumns(2);
         gridView.setDrawSelectorOnTop(true);
         gridView.setSelector(R.drawable.selector_basemap);
@@ -247,20 +304,20 @@ public class MainActivity extends AppCompatActivity {
         builder.setView(gridView);
         builder.setTitle(R.string.title_select_basemap);
         gridViewAlertDialog = builder.show();
+        mBasemapGridView = gridView;
 
         gridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                if (position >= 0 && position < portalResultSet.getTotalResults()) {
-                    List<PortalItem> portalResults = portalResultSet.getResults();
-                    if (portalResults != null) {
-                        PortalItem portalItem = portalResults.get(position);
-                        if (portalItem != null) {
-                            if (gridViewAlertDialog != null) {
-                                gridViewAlertDialog.dismiss();
-                            }
-                            changeBasemapToPortalItem(portalItem);
+                if (position >= 0 && position < mBasemapList.size()) {
+                    PortalItem portalItem = mBasemapList.get(position).getPortalItem();
+                    if (portalItem != null) {
+                        Log.d("CLICK", "Clicked on " + portalItem.getTitle());
+                        if (gridViewAlertDialog != null) {
+                            mBasemapGridView = null;
+                            gridViewAlertDialog.dismiss();
                         }
+                        changeBasemapToPortalItem(portalItem);
                     }
                 }
             }
@@ -295,7 +352,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * This method cycles through 6 standard basemaps.
+     * This method cycles through 6 standard base maps. Use this as a test interface to display
+     * different base maps.
      */
     public void changeBasemapToBasemapType() {
         Basemap newBasemap;
@@ -328,48 +386,28 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Query the Portal for a list of available basemaps. When the result set comes back we
-     * display the results in a popup dialog grid.
+     * Request to show the base map selector popup. If we have not loaded the base maps
+     * then fetch them from the portal.
      */
     private void showBasemapSelector() {
         if (mArcgisPortal == null) {
             // if we arrived here yet not logged in then some logic is wrong.
+            showErrorAlert(getString(R.string.sequence_error), getString(R.string.err_login_required));
             return;
         }
-        PortalInfo portalInformation = mArcgisPortal.getPortalInfo();
-        PortalQueryParams queryParams = new PortalQueryParams();
-        queryParams.setQuery(portalInformation.getBasemapGalleryGroupQuery());
-        final ListenableFuture<PortalQueryResultSet<PortalGroup>> groupFuture = mArcgisPortal.findGroupsAsync(queryParams);
-        groupFuture.addDoneListener(new Runnable() {
-            @Override
-            public void run() {
+        if (mBasemapList == null) {
+            // no base maps in the cache requires us to see if we can load them from the portal
+            FetchGroupBasemaps fetchGroupBasemaps = new FetchGroupBasemaps(this, mArcgisPortal, basemapFetchTaskComplete);
+            if (fetchGroupBasemaps!= null) {
                 try {
-                    PortalQueryResultSet<PortalGroup> basemapGroupResult = groupFuture.get();
-                    PortalGroup group = basemapGroupResult.getResults().get(0);
-                    PortalQueryParams basemapQueryParams = new PortalQueryParams();
-                    basemapQueryParams.setQueryForItemsInGroup(group.getId());
-                    final ListenableFuture<PortalQueryResultSet<PortalItem>> contentFuture = mArcgisPortal.findItemsAsync(basemapQueryParams);
-                    contentFuture.addDoneListener(new Runnable() {
-                        @Override
-                        public void run() {
-                            try {
-                                mPortalResultSet = contentFuture.get();
-                                runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        showGridDialog(mPortalResultSet);
-                                    }
-                                });
-                            } catch (Exception exception) {
-                                showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_load_query) + exception.getLocalizedMessage());
-                            }
-                        }
-                    });
+                    fetchGroupBasemaps.start();
                 } catch (Exception exception) {
-                    showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_query_portal) + exception.getLocalizedMessage());
+                    showErrorAlert(getString(R.string.action_fetch_basemaps), getString(R.string.err_fetching_basemaps));
                 }
             }
-        });
+        } else {
+            showGridDialog();
+        }
     }
 
     /**
@@ -445,9 +483,36 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
+     * Given a specific basemapItem instance, find that item in the grid view and refresh its content.
+     * @param basemapItem
+     */
+    public void refreshBasemapThumbnail (BasemapItem basemapItem) {
+        if (mBasemapGridView == null || basemapItem == null) {
+            return;
+        }
+        Log.d("refreshBasemapThumbnail", "OK somehow need to set bitmap on gridview for " + basemapItem.getIndex());
+        View gridViewCell = mBasemapGridView.getChildAt(basemapItem.getIndex());
+        if (gridViewCell != null) {
+            PortalItem portalItem = basemapItem.getPortalItem();
+            TextView textView = (TextView) gridViewCell.findViewById(R.id.textViewMap);
+            textView.setText(portalItem.getTitle());
+            final ImageView imageView = (ImageView) gridViewCell.findViewById(R.id.imageViewMap);
+            if (imageView != null) {
+                Bitmap thumbnail = basemapItem.getImage();
+                if (thumbnail != null) {
+                    imageView.setImageBitmap(thumbnail);
+                } else {
+                    Log.d("refreshBasemapThumbnail", "No image loaded (yet) for " + portalItem.getTitle());
+                }
+            }
+        }
+    }
+
+
+    /**
      * A simple interface for handling asynchronous events after a login succeeds or fails.
      */
-    private final LoginCompletionInterface loginCompletionCallback = new LoginCompletionInterface () {
+    private final LoginCompletionInterface loginCompletionCallback = new LoginCompletionInterface() {
         public void onLoginCompleted() {
             loadLayerWithItem(mLayerItemId);
             showBasemapSelector();
@@ -459,7 +524,65 @@ public class MainActivity extends AppCompatActivity {
     };
 
     /**
-     * A simple alert box with an OK button to cancel it.
+     * Interface for handling asynchronous fetching of the list of available base maps
+     */
+    private final BasemapFetchTaskComplete basemapFetchTaskComplete = new BasemapFetchTaskComplete() {
+        public void onBasemapFetchCompleted(final PortalQueryResultSet<PortalItem> portalResultSet) {
+            buildPortalItemCache(portalResultSet);
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    showGridDialog();
+                }
+            });
+        }
+
+        public void onBasemapFetchFailed(String errorMessage) {
+            showErrorAlert(getString(R.string.action_fetch_basemaps), getString(R.string.err_fetching_basemaps) + ": " + errorMessage);
+        }
+    };
+
+    /**
+     * When loading items in serial order, find the next unloaded item and try to load it.
+     */
+    private void loadNextUnloadedThumbnail() {
+        for (int index = 0; index < mBasemapList.size(); index ++) {
+            BasemapItem nextBasemapItem = mBasemapList.get(index);
+            if (nextBasemapItem != null) {
+                if ( ! nextBasemapItem.isLoaded()) {
+                    nextBasemapItem.loadImage(imageLoadedCompletionInterface);
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Implementation of the ImageLoadedCompletionInterface when thumbnails load asynchronously and
+     * we receive the delegation so we can determine what to do with the loaded (or failed) image.
+     */
+    private final BasemapItem.ImageLoadedCompletionInterface imageLoadedCompletionInterface = new BasemapItem.ImageLoadedCompletionInterface() {
+        public void onImageCompleted(BasemapItem basemapItem) {
+            mThumbnailsRequested --;
+            if (mBasemapGridView != null) {
+                refreshBasemapThumbnail(basemapItem);
+            }
+            if (mLoadImagesSerial) {
+                loadNextUnloadedThumbnail();
+            }
+        }
+
+        public void onImageFailed(BasemapItem basemapItem, String errorMessage) {
+            mThumbnailsRequested --;
+            if (mLoadImagesSerial) {
+                loadNextUnloadedThumbnail();
+            }
+        }
+    };
+
+    /**
+     * A simple alert box with an OK button to cancel it. Use this to report info and errors
+     * to the user.
      * @param errorTitle String A string to use for the title of the alert.
      * @param errorMessage String A string to use for the message to display.
      */

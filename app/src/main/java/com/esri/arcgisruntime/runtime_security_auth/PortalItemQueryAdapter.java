@@ -3,8 +3,6 @@ package com.esri.arcgisruntime.runtime_security_auth;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.drawable.BitmapDrawable;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -13,11 +11,9 @@ import android.widget.BaseAdapter;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.esri.arcgisruntime.concurrent.ListenableFuture;
 import com.esri.arcgisruntime.portal.PortalItem;
-import com.esri.arcgisruntime.portal.PortalQueryResultSet;
 
-import java.util.List;
+import java.util.ArrayList;
 
 /**
  * PortalItemQueryAdapter is a gridView adapter that uses a PortalQueryResultSet and builds a
@@ -28,21 +24,15 @@ public class PortalItemQueryAdapter extends BaseAdapter {
 
     private Context mContext;
     private Activity mActivity;
-    private List<PortalItem> mPortalResults;
+    private ArrayList<BasemapItem> mPortalResults;
 
-    public PortalItemQueryAdapter(Context context, Activity activity, PortalQueryResultSet<PortalItem> portalResultSet) {
-//        mContext = context;
+    public PortalItemQueryAdapter(Activity activity, ArrayList<BasemapItem> portalResultSet) {
         mActivity = activity;
         mContext = activity.getBaseContext();
-        mPortalResults = portalResultSet.getResults();
+        mPortalResults = portalResultSet;
     }
 
     public View getView(int position, View convertView, ViewGroup parent) {
-
-        // use Android adapter pattern basemap adapter, basemap item, image adapter pattern
-        // maps-app-android, drawitems
-        // arcgis-runtime-demos-android MaterialBasemaps
-
         if (position > mPortalResults.size()) {
             return null;
         }
@@ -50,37 +40,20 @@ public class PortalItemQueryAdapter extends BaseAdapter {
 
         if (convertView == null) {
             boolean errorLoadingImage = false;
-            final PortalItem portalItem = mPortalResults.get(position);
+            BasemapItem basemapItem = mPortalResults.get(position);
+            final PortalItem portalItem = basemapItem.getPortalItem();
             LayoutInflater inflater = (LayoutInflater) mContext.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             gridViewCell = inflater.inflate(R.layout.basemap_grid_item, null);
             TextView textView = (TextView) gridViewCell.findViewById(R.id.textViewMap);
             textView.setText(portalItem.getTitle());
             final ImageView imageView = (ImageView) gridViewCell.findViewById(R.id.imageViewMap);
             if (imageView != null && portalItem.getThumbnailFileName() != null) {
-                final ListenableFuture<byte[]> itemThumbnailDataFuture = portalItem.fetchThumbnailAsync();
-                threadDelay();
-                itemThumbnailDataFuture.addDoneListener(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            byte[] itemThumbnailData = itemThumbnailDataFuture.get();
-                            if ((itemThumbnailData != null) && (itemThumbnailData.length > 0)) {
-                                Bitmap itemThumbnail = BitmapFactory.decodeByteArray(itemThumbnailData, 0, itemThumbnailData.length);
-                                final BitmapDrawable drawable = new BitmapDrawable(mContext.getResources(), itemThumbnail);
-                                if (drawable != null) {
-                                    mActivity.runOnUiThread(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            imageView.setImageBitmap(drawable.getBitmap());
-                                        }
-                                    });
-                                }
-                            }
-                        } catch (Exception exception) {
-                            Log.d("Basemaps query", "Unable to load thumbnail for " + portalItem.getTitle());
-                        }
-                    }
-                });
+                Bitmap thumbnail = basemapItem.getImage();
+                if (thumbnail != null) {
+                    imageView.setImageBitmap(thumbnail);
+                } else {
+                    Log.d("getView", "No image loaded (yet) for " + portalItem.getTitle());
+                }
             }
             if (errorLoadingImage) {
                 imageView.setImageResource(R.drawable.no_thumbnail);
@@ -89,14 +62,6 @@ public class PortalItemQueryAdapter extends BaseAdapter {
             gridViewCell = convertView;
         }
         return gridViewCell;
-    }
-
-    private void threadDelay() {
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Log.d("Basemaps query", "Thread sleep fails");
-        }
     }
 
     @Override
@@ -115,6 +80,6 @@ public class PortalItemQueryAdapter extends BaseAdapter {
 
     @Override
     public long getItemId(int position) {
-        return position;
+        return mPortalResults.get(position).getIndex();
     }
 }
