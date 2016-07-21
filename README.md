@@ -1,6 +1,8 @@
 # Android-QuartzSecurity
 An Android app demonstrating how to use Quartz runtime security services.
 
+![App](assets/app-screen-shot-1.png)
+
 There is an accompanying MS Word document that explains everything. It will be converted to MD/HTML once the project is ready.
 
  - Login users
