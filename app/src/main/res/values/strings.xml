@@ -4,6 +4,7 @@
     <string name="action_logout">Logout</string>
     <string name="action_fetch_basemaps">Fetch Base Maps</string>
     <string name="action_OK">OK</string>
+    <string name="action_route">Route</string>
     <string name="title_select_basemap">Select a base map</string>
     <string name="info_login_to_continue">You must login to select available base maps.</string>
     <string name="info_not_logged_in">You are not logged in.</string>
@@ -17,6 +18,8 @@
     <string name="err_login_required">You must login before you can use this feature.</string>
     <string name="err_no_items">No items were found on the portal.</string>
     <string name="err_fetching_basemaps">Error while fetching base maps from portal.</string>
+    <string name="err_fetching_feature">Error while getting feature attributes.</string>
     <string name="system_error">System error</string>
+    <string name="unknown_error">Unknown error</string>
     <string name="sequence_error">Sequence error</string>
 </resources>

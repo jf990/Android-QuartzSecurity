@@ -105,7 +105,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
             } catch (Exception exception) {
-                Log.d("MENU-BUTTON", "Canot create instance of FloatingActionButton");
+                Log.d("MENU-BUTTON", "Cannot create instance of FloatingActionButton");
             }
         }
         mMapView = (MapView) findViewById(R.id.mapView);
@@ -410,6 +410,10 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void setMapTouchHandler() {
+        mMapView.setOnTouchListener(new IdentifyFeatureLayerTouchListener(this, mMapView, mFeatureLayer));
+    }
+
     /**
      * Load a feature layer given a feature service URL.
      * @param serviceURL String The URL pointing to the feature service (from ArcGIS Online.)
@@ -419,6 +423,7 @@ public class MainActivity extends AppCompatActivity {
         mFeatureLayer = new FeatureLayer(serviceFeatureTable);
         mMap.getOperationalLayers().add(mFeatureLayer);
         mLoadedFeatureService = true;
+        setMapTouchHandler();
     }
 
     /**
@@ -434,6 +439,7 @@ public class MainActivity extends AppCompatActivity {
                         @Override
                         public void run() {
                             layerLoaded(portalItem);
+                            setMapTouchHandler();
                         }
                     });
                     portalItem.loadAsync();
@@ -456,10 +462,10 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    FeatureLayer featureLayer = new FeatureLayer(portalItem, 0);
+                    mFeatureLayer = new FeatureLayer(portalItem, 0);
                     LayerList layerList = mMap.getOperationalLayers();
                     if (layerList != null) {
-                        layerList.add(featureLayer);
+                        layerList.add(mFeatureLayer);
                     }
                 }
             });
@@ -586,7 +592,7 @@ public class MainActivity extends AppCompatActivity {
      * @param errorTitle String A string to use for the title of the alert.
      * @param errorMessage String A string to use for the message to display.
      */
-    private void showErrorAlert (String errorTitle, String errorMessage) {
+    public void showErrorAlert (String errorTitle, String errorMessage) {
         Log.d(errorTitle, errorMessage);
         if (mShowErrors) {
             AlertDialog.Builder alertDialog = new AlertDialog.Builder(MainActivity.this);
