@@ -4,7 +4,6 @@
 
 package com.esri.arcgisruntime.runtime_security_auth;
 
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -17,12 +16,8 @@ import android.view.MotionEvent;
 import com.esri.arcgisruntime.ArcGISRuntimeException;
 import com.esri.arcgisruntime.concurrent.ListenableFuture;
 import com.esri.arcgisruntime.datasource.Feature;
-import com.esri.arcgisruntime.datasource.FeatureTable;
-import com.esri.arcgisruntime.datasource.Field;
 import com.esri.arcgisruntime.layers.FeatureLayer;
 import com.esri.arcgisruntime.mapping.GeoElement;
-import com.esri.arcgisruntime.mapping.popup.Popup;
-import com.esri.arcgisruntime.mapping.popup.PopupDefinition;
 import com.esri.arcgisruntime.mapping.view.DefaultMapViewOnTouchListener;
 import com.esri.arcgisruntime.mapping.view.IdentifyLayerResult;
 import com.esri.arcgisruntime.mapping.view.MapView;
@@ -89,7 +84,7 @@ public class IdentifyFeatureLayerTouchListener extends DefaultMapViewOnTouchList
                                 if (identifiedFeaturesList.size() > 0) {
                                     // Our app only wants one feature selected at a time. Monitor the last
                                     // selected feature so we can unselect it.
-                                    featureLayer.clearSelection(); // this API does not do anything.
+                                    featureLayer.clearSelection(); // TODO: this API does not do anything.
                                     if (mLastFeatureSelected != null) {
                                         featureLayer.unselectFeature(mLastFeatureSelected);
                                     }
@@ -110,6 +105,9 @@ public class IdentifyFeatureLayerTouchListener extends DefaultMapViewOnTouchList
                 });
             } catch (IllegalArgumentException exception) {
                 Log.d("onSingleTapConfirmed", "bad arg for identifyPopupsAsync: " + exception.getLocalizedMessage());
+                identified = false;
+            } catch (ArcGISRuntimeException exception) {
+                Log.d("onSingleTapConfirmed", "Runtime exception: (" + exception.getErrorCode() + ") " + exception.getCause());
                 identified = false;
             } catch (Exception exception) {
                 Log.d("onSingleTapConfirmed", "exception for identifyPopupsAsync: " + exception.getLocalizedMessage());
@@ -177,7 +175,9 @@ public class IdentifyFeatureLayerTouchListener extends DefaultMapViewOnTouchList
         alertDialog.setCancelable(true);
         alertDialog.setPositiveButton(R.string.action_route, new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface dialog, int id) {
-                Log.d("createPopupDialog", "Perform route task");
+                if (mContext != null) {
+                    ((MainActivity) mContext).startRouteTask(mLastFeatureSelected);
+                }
             }
         });
         alertDialog.setNegativeButton(R.string.action_OK, null); // this just dismisses the dialog

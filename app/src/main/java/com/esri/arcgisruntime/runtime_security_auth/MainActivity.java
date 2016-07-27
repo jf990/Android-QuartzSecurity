@@ -20,6 +20,8 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.esri.arcgisruntime.ArcGISRuntimeException;
+import com.esri.arcgisruntime.concurrent.ListenableFuture;
+import com.esri.arcgisruntime.datasource.Feature;
 import com.esri.arcgisruntime.datasource.arcgis.ServiceFeatureTable;
 import com.esri.arcgisruntime.loadable.LoadStatus;
 import com.esri.arcgisruntime.layers.FeatureLayer;
@@ -35,6 +37,8 @@ import com.esri.arcgisruntime.portal.PortalQueryResultSet;
 import com.esri.arcgisruntime.security.AuthenticationManager;
 import com.esri.arcgisruntime.security.DefaultAuthenticationChallengeHandler;
 import com.esri.arcgisruntime.security.OAuthConfiguration;
+import com.esri.arcgisruntime.tasks.route.RouteParameters;
+import com.esri.arcgisruntime.tasks.route.RouteTask;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,6 +70,7 @@ public class MainActivity extends AppCompatActivity {
     private String mClientId = "OOraRX2FZx7X6cTs";
     private String mLayerItemId = "7995c5a997d248549e563178ad25c3e1";
     private String mLayerServiceURL = "http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0";
+    private String mRouteTaskURL = "";
 
     // Configuration to restore on resume, reload:
     private Viewpoint mCurrentViewPoint;
@@ -603,5 +608,50 @@ public class MainActivity extends AppCompatActivity {
             AlertDialog alertDialogInstance = alertDialog.create();
             alertDialogInstance.show();
         }
+    }
+
+    /**
+     * Route from current location to specified feature location.
+     * @param featureToRouteTo The route ends here.
+     */
+    public void startRouteTask(Feature featureToRouteTo) {
+        if (featureToRouteTo != null) {
+            Log.d("startRouteTask", "Perform route task");
+            final RouteTask routeTask = new RouteTask(mRouteTaskURL);
+            if (routeTask != null) {
+                routeTask.addDoneLoadingListener(new Runnable() {
+                    @Override
+                    public void run() {
+                        ArcGISRuntimeException loadError = routeTask.getLoadError();
+                        LoadStatus loadStatus = routeTask.getLoadStatus();
+                        if (loadError == null && loadStatus == LoadStatus.LOADED) {
+                            setupRouteParameters(routeTask);
+                        } else {
+                            Log.d("startRouteTask", "Not able to load route task status=" + loadStatus + ", error=" + loadError.getCause());
+                        }
+                    }
+                });
+                routeTask.loadAsync();
+            }
+        } else {
+            Log.d("startRouteTask", "No feature to end route task!");
+        }
+    }
+
+    public void setupRouteParameters(final RouteTask routeTask) {
+        final ListenableFuture<RouteParameters> routeParametersFuture = routeTask.generateDefaultParametersAsync();
+        routeParametersFuture.addDoneListener(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    RouteParameters routeParameters = routeParametersFuture.get();
+                    routeParameters.setReturnDirections(true);
+                    routeParameters.setReturnRoutes(true);
+                    routeParameters.setOutputSpatialReference(mMapView.getSpatialReference());
+                } catch (Exception exception) {
+
+                }
+            }
+        });
     }
 }
