@@ -83,11 +83,8 @@ public class IdentifyFeatureLayerTouchListener extends DefaultMapViewOnTouchList
                                 List<GeoElement> identifiedFeaturesList = identifyLayerResult.getIdentifiedElements();
                                 if (identifiedFeaturesList.size() > 0) {
                                     // Our app only wants one feature selected at a time. Monitor the last
-                                    // selected feature so we can unselect it.
-                                    featureLayer.clearSelection(); // TODO: this API does not do anything.
-                                    if (mLastFeatureSelected != null) {
-                                        featureLayer.unselectFeature(mLastFeatureSelected);
-                                    }
+                                    // selected feature so we can pass it to the rounte task if the user asks for a route.
+                                    featureLayer.clearSelection();
                                     mLastFeatureSelected = (Feature) identifiedFeaturesList.get(0);
                                     showInfoForFeature(featureLayer, mLastFeatureSelected);
                                 } else {
