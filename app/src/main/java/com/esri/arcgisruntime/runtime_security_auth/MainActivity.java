@@ -19,6 +19,7 @@ import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import com.esri.arcgisruntime.ArcGISRuntimeEnvironment;
 import com.esri.arcgisruntime.ArcGISRuntimeException;
 import com.esri.arcgisruntime.concurrent.ListenableFuture;
 import com.esri.arcgisruntime.datasource.Feature;
@@ -113,11 +114,7 @@ public class MainActivity extends AppCompatActivity {
                 Log.d("MENU-BUTTON", "Cannot create instance of FloatingActionButton");
             }
         }
-        mMapView = (MapView) findViewById(R.id.mapView);
-        mMap = new ArcGISMap(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
-        mMapView.setMap(mMap);
-        loadLayerWithService(mLayerServiceURL);
-        setupChallengeHandler();
+        setupMap();
     }
 
     @Override
@@ -161,6 +158,19 @@ public class MainActivity extends AppCompatActivity {
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    /**
+     * Perform all the necessary steps to setup, initialize, and load the map for the first time.
+     */
+    private void setupMap() {
+        ArcGISRuntimeEnvironment.setClientId(mClientId);
+        Log.d("setupMap", "ArcGIS version: " + ArcGISRuntimeEnvironment.getAPIVersion() + ", " + ArcGISRuntimeEnvironment.getAPILabel());
+        mMapView = (MapView) findViewById(R.id.mapView);
+        mMap = new ArcGISMap(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
+        mMapView.setMap(mMap);
+        loadLayerWithService(mLayerServiceURL);
+        setupChallengeHandler();
     }
 
     /**
@@ -612,6 +622,15 @@ public class MainActivity extends AppCompatActivity {
 
     /**
      * Route from current location to specified feature location.
+     *   1. User must be logged in. If user is not logged in then login now.
+     *   2. Load RouteTask
+     *   3. Load default Parameters
+     *   4. Set Parameters
+     *   5. get current device location.
+     *   6. Set stops: current device location, feature location
+     *   7. solve route
+     *   8. create graphics overlay
+     *   9. getRouteGeometry, add route graphics to graphics layer
      * @param featureToRouteTo The route ends here.
      */
     public void startRouteTask(Feature featureToRouteTo) {
@@ -648,8 +667,10 @@ public class MainActivity extends AppCompatActivity {
                     routeParameters.setReturnDirections(true);
                     routeParameters.setReturnRoutes(true);
                     routeParameters.setOutputSpatialReference(mMapView.getSpatialReference());
+                } catch (ArcGISRuntimeException exception) {
+                    Log.d("setupRouteParameters", "Runtime exception: (" + exception.getErrorCode() + ") " + exception.getCause());
                 } catch (Exception exception) {
-
+                    Log.d("setupRouteParameters", "Cannot start route: " + exception.getLocalizedMessage());
                 }
             }
         });
