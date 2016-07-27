@@ -16,7 +16,8 @@ allprojects {
     repositories {
         jcenter()
         maven {
-            url 'https://esri.bintray.com/arcgis'
+//            url 'https://esri.bintray.com/arcgis'
+            url 'http://android:8080/artifactory/arcgis'
         }
     }
 }
