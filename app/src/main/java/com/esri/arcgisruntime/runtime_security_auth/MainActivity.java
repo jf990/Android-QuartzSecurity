@@ -24,8 +24,12 @@ import com.esri.arcgisruntime.ArcGISRuntimeException;
 import com.esri.arcgisruntime.concurrent.ListenableFuture;
 import com.esri.arcgisruntime.datasource.Feature;
 import com.esri.arcgisruntime.datasource.arcgis.ServiceFeatureTable;
+import com.esri.arcgisruntime.geometry.Geometry;
+import com.esri.arcgisruntime.geometry.GeometryType;
+import com.esri.arcgisruntime.geometry.Point;
 import com.esri.arcgisruntime.loadable.LoadStatus;
 import com.esri.arcgisruntime.layers.FeatureLayer;
+import com.esri.arcgisruntime.location.AndroidLocationDataSource;
 import com.esri.arcgisruntime.mapping.Basemap;
 import com.esri.arcgisruntime.mapping.ArcGISMap;
 import com.esri.arcgisruntime.mapping.LayerList;
@@ -38,8 +42,10 @@ import com.esri.arcgisruntime.portal.PortalQueryResultSet;
 import com.esri.arcgisruntime.security.AuthenticationManager;
 import com.esri.arcgisruntime.security.DefaultAuthenticationChallengeHandler;
 import com.esri.arcgisruntime.security.OAuthConfiguration;
+import com.esri.arcgisruntime.tasks.route.DirectionDistanceTextUnits;
 import com.esri.arcgisruntime.tasks.route.RouteParameters;
 import com.esri.arcgisruntime.tasks.route.RouteTask;
+import com.esri.arcgisruntime.tasks.route.Stop;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -52,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
     private ArcGISMap mMap = null;
     private Portal mArcgisPortal = null;
     private FeatureLayer mFeatureLayer;
+    private Feature mFeatureToRouteTo;
     private ArrayList<BasemapItem> mBasemapList = null; // maintain a cache of the basemaps we discover
     private int mNextBasemap = 0;
     private boolean mShowErrors = true;
@@ -71,7 +78,7 @@ public class MainActivity extends AppCompatActivity {
     private String mClientId = "OOraRX2FZx7X6cTs";
     private String mLayerItemId = "7995c5a997d248549e563178ad25c3e1";
     private String mLayerServiceURL = "http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0";
-    private String mRouteTaskURL = "";
+    private String mRouteTaskURL = "http://route.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_World";
 
     // Configuration to restore on resume, reload:
     private Viewpoint mCurrentViewPoint;
@@ -497,7 +504,7 @@ public class MainActivity extends AppCompatActivity {
      */
     private void onClickMapButton(View view) {
         if ( ! mUserIsLoggedIn) {
-            loginUser(loginCompletionCallback);
+            loginUser(loginCompletionCallbackForBasemaps);
         } else {
              showBasemapSelector();
         }
@@ -529,14 +536,26 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-
     /**
-     * A simple interface for handling asynchronous events after a login succeeds or fails.
+     * Implement the login completion interface for loading organization basemaps.
      */
-    private final LoginCompletionInterface loginCompletionCallback = new LoginCompletionInterface() {
+    private final LoginCompletionInterface loginCompletionCallbackForBasemaps = new LoginCompletionInterface() {
         public void onLoginCompleted() {
             loadLayerWithItem(mLayerItemId);
             showBasemapSelector();
+        }
+
+        public void onLoginFailed(int errorCode, String errorMessage) {
+            showErrorAlert(getString(R.string.action_login), errorMessage + "(" + errorCode + ") " + getString(R.string.info_login_to_continue));
+        }
+    };
+
+    /**
+     * Implement the login completion interface for loading route task.
+     */
+    private final LoginCompletionInterface loginCompletionCallbackForRouting = new LoginCompletionInterface() {
+        public void onLoginCompleted() {
+            loadRouteTask();
         }
 
         public void onLoginFailed(int errorCode, String errorMessage) {
@@ -621,12 +640,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Route from current location to specified feature location.
+     * Begin route from current location to specified feature location. This is the starting
+     * point to a rather complex asynchronous sequence of events:
      *   1. User must be logged in. If user is not logged in then login now.
-     *   2. Load RouteTask
-     *   3. Load default Parameters
-     *   4. Set Parameters
-     *   5. get current device location.
+     *   2. Read device location. If locator is not on then turn it on and wait for a stable read.
+     *   3. Load RouteTask. This is async and we wait for it to complete.
+     *   4. Load default Parameters
+     *   5. Set Parameters
      *   6. Set stops: current device location, feature location
      *   7. solve route
      *   8. create graphics overlay
@@ -635,44 +655,88 @@ public class MainActivity extends AppCompatActivity {
      */
     public void startRouteTask(Feature featureToRouteTo) {
         if (featureToRouteTo != null) {
-            Log.d("startRouteTask", "Perform route task");
-            final RouteTask routeTask = new RouteTask(mRouteTaskURL);
-            if (routeTask != null) {
-                routeTask.addDoneLoadingListener(new Runnable() {
-                    @Override
-                    public void run() {
-                        ArcGISRuntimeException loadError = routeTask.getLoadError();
-                        LoadStatus loadStatus = routeTask.getLoadStatus();
-                        if (loadError == null && loadStatus == LoadStatus.LOADED) {
-                            setupRouteParameters(routeTask);
-                        } else {
-                            Log.d("startRouteTask", "Not able to load route task status=" + loadStatus + ", error=" + loadError.getCause());
-                        }
-                    }
-                });
-                routeTask.loadAsync();
+            mFeatureToRouteTo = featureToRouteTo;
+            if ( ! mUserIsLoggedIn) {
+                loginUser(loginCompletionCallbackForRouting);
+            } else {
+                loadRouteTask();
             }
         } else {
             Log.d("startRouteTask", "No feature to end route task!");
         }
     }
 
-    public void setupRouteParameters(final RouteTask routeTask) {
-        final ListenableFuture<RouteParameters> routeParametersFuture = routeTask.generateDefaultParametersAsync();
-        routeParametersFuture.addDoneListener(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    RouteParameters routeParameters = routeParametersFuture.get();
-                    routeParameters.setReturnDirections(true);
-                    routeParameters.setReturnRoutes(true);
-                    routeParameters.setOutputSpatialReference(mMapView.getSpatialReference());
-                } catch (ArcGISRuntimeException exception) {
-                    Log.d("setupRouteParameters", "Runtime exception: (" + exception.getErrorCode() + ") " + exception.getCause());
-                } catch (Exception exception) {
-                    Log.d("setupRouteParameters", "Cannot start route: " + exception.getLocalizedMessage());
+    /**
+     * Make sure we are able to load the route task
+     */
+    public void loadRouteTask() {
+        final RouteTask routeTask = new RouteTask(mRouteTaskURL);
+        if (routeTask != null) {
+            routeTask.addDoneLoadingListener(new Runnable() {
+                @Override
+                public void run() {
+                    ArcGISRuntimeException loadError = routeTask.getLoadError();
+                    LoadStatus loadStatus = routeTask.getLoadStatus();
+                    if (loadError == null && loadStatus == LoadStatus.LOADED) {
+                        setupRouteParameters(routeTask);
+                    } else {
+                        Log.d("startRouteTask", "Not able to load route task status=" + loadStatus + ", error=" + loadError.getCause());
+                    }
                 }
+            });
+            routeTask.loadAsync();
+        }
+    }
+
+    /**
+     * With a loaded route task setup the route parameters.
+     * @param routeTask
+     */
+    public void setupRouteParameters(final RouteTask routeTask) {
+        if (mFeatureToRouteTo != null && mUserIsLoggedIn) {
+            final ListenableFuture<RouteParameters> routeParametersFuture = routeTask.generateDefaultParametersAsync();
+            routeParametersFuture.addDoneListener(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        Stop routeToStop = null;
+                        Stop routeFromStop = null;
+
+                        Geometry routeToPoint = mFeatureToRouteTo.getGeometry();
+                        if (routeToPoint != null && routeToPoint.getGeometryType() == GeometryType.POINT) {
+                            routeToStop = new Stop((Point)routeToPoint);
+                        }
+                        if (routeToStop != null && routeFromStop != null) {
+                            RouteParameters routeParameters = routeParametersFuture.get();
+                            routeParameters.setReturnDirections(true);
+                            routeParameters.setReturnRoutes(true);
+                            routeParameters.setOutputSpatialReference(mMapView.getSpatialReference());
+                            routeParameters.setDirectionsDistanceTextUnits(DirectionDistanceTextUnits.IMPERIAL);
+                            routeParameters.getStops().add(routeFromStop);
+                            routeParameters.getStops().add(routeToStop);
+                        } else {
+                            Log.d("setupRouteParameters", "Not enough info to solve a route.");
+                        }
+                    } catch (ArcGISRuntimeException exception) {
+                        Log.d("setupRouteParameters", "Runtime exception: (" + exception.getErrorCode() + ") " + exception.getCause());
+                    } catch (Exception exception) {
+                        Log.d("setupRouteParameters", "Cannot start route: " + exception.getLocalizedMessage());
+                    }
+                }
+            });
+        } else {
+            Log.d("startRouteTask", "No feature to end route task, or not logged in!");
+        }
+    }
+
+    public void getDeviceLocation() {
+        try {
+            AndroidLocationDataSource locationDataSource = new AndroidLocationDataSource(this);
+            if (locationDataSource != null) {
+                locationDataSource.startAsync();
             }
-        });
+        } catch (Exception exception) {
+            Log.d("getDeviceLocation", "Location datasource fails to init: (" + exception.getLocalizedMessage());
+        }
     }
 }
