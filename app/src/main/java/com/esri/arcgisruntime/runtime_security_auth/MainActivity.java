@@ -78,7 +78,7 @@ public class MainActivity extends AppCompatActivity {
     private String mClientId = "OOraRX2FZx7X6cTs";
     private String mLayerItemId = "7995c5a997d248549e563178ad25c3e1";
     private String mLayerServiceURL = "http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0";
-    private String mRouteTaskURL = "http://route.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_World";
+    private String mRouteTaskURL = "http://route.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_NorthAmerica"; // http://route.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_World
 
     // Configuration to restore on resume, reload:
     private Viewpoint mCurrentViewPoint;
@@ -657,6 +657,7 @@ public class MainActivity extends AppCompatActivity {
         if (featureToRouteTo != null) {
             mFeatureToRouteTo = featureToRouteTo;
             if ( ! mUserIsLoggedIn) {
+//                loadRouteTask();
                 loginUser(loginCompletionCallbackForRouting);
             } else {
                 loadRouteTask();
@@ -680,7 +681,7 @@ public class MainActivity extends AppCompatActivity {
                     if (loadError == null && loadStatus == LoadStatus.LOADED) {
                         setupRouteParameters(routeTask);
                     } else {
-                        Log.d("startRouteTask", "Not able to load route task status=" + loadStatus + ", error=" + loadError.getCause());
+                        Log.d("startRouteTask", "Not able to load route task status=" + loadStatus + ", error=" + loadError.getCause() + "/" + loadError.getLocalizedMessage());
                     }
                 }
             });
@@ -729,7 +730,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public void getDeviceLocation() {
+    public void startDeviceLocator() {
         try {
             AndroidLocationDataSource locationDataSource = new AndroidLocationDataSource(this);
             if (locationDataSource != null) {
