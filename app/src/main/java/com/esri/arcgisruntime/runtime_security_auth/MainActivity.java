@@ -29,11 +29,13 @@ import com.esri.arcgisruntime.geometry.GeometryType;
 import com.esri.arcgisruntime.geometry.Point;
 import com.esri.arcgisruntime.loadable.LoadStatus;
 import com.esri.arcgisruntime.layers.FeatureLayer;
-import com.esri.arcgisruntime.location.AndroidLocationDataSource;
 import com.esri.arcgisruntime.mapping.Basemap;
 import com.esri.arcgisruntime.mapping.ArcGISMap;
 import com.esri.arcgisruntime.mapping.LayerList;
 import com.esri.arcgisruntime.mapping.Viewpoint;
+import com.esri.arcgisruntime.mapping.view.Graphic;
+import com.esri.arcgisruntime.mapping.view.GraphicsOverlay;
+import com.esri.arcgisruntime.mapping.view.LocationDisplay;
 import com.esri.arcgisruntime.mapping.view.MapView;
 import com.esri.arcgisruntime.portal.Portal;
 import com.esri.arcgisruntime.portal.PortalItem;
@@ -42,10 +44,15 @@ import com.esri.arcgisruntime.portal.PortalQueryResultSet;
 import com.esri.arcgisruntime.security.AuthenticationManager;
 import com.esri.arcgisruntime.security.DefaultAuthenticationChallengeHandler;
 import com.esri.arcgisruntime.security.OAuthConfiguration;
+import com.esri.arcgisruntime.symbology.SimpleLineSymbol;
+import com.esri.arcgisruntime.symbology.SimpleMarkerSymbol;
 import com.esri.arcgisruntime.tasks.route.DirectionDistanceTextUnits;
+import com.esri.arcgisruntime.tasks.route.Route;
 import com.esri.arcgisruntime.tasks.route.RouteParameters;
+import com.esri.arcgisruntime.tasks.route.RouteResult;
 import com.esri.arcgisruntime.tasks.route.RouteTask;
 import com.esri.arcgisruntime.tasks.route.Stop;
+import com.esri.arcgisruntime.util.ListenableList;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -69,13 +76,18 @@ public class MainActivity extends AppCompatActivity {
     private int mThumbnailsRequested = 0;
 
     // Configuration to set at initial load or reset:
-    private Basemap.Type mStartBasemapType = Basemap.Type.IMAGERY_WITH_LABELS;
+    private Basemap.Type mStartBasemapType = Basemap.Type.STREETS;
     private double mStartLatitude = 40.7576;
     private double mStartLongitude = -73.9857;
     private int mStartLevelOfDetail = 12;
+    private int mRouteColor = 0xa022bb22;
+    private int mRouteMarkerColor = 0xa0bb2222;
+    private int mRouteLineSize = 20;
+    private SimpleLineSymbol.Style mLineStyle = SimpleLineSymbol.Style.DASH_DOT;
     private String mPortalURL = "http://www.arcgis.com/";
     private String mOAuthRedirectURI = "arcgis-runtime-auth://auth";
     private String mClientId = "OOraRX2FZx7X6cTs";
+    private String mLicenseString = "unlicensed";
     private String mLayerItemId = "7995c5a997d248549e563178ad25c3e1";
     private String mLayerServiceURL = "http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0";
     private String mRouteTaskURL = "http://route.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_NorthAmerica"; // http://route.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_World
@@ -171,13 +183,15 @@ public class MainActivity extends AppCompatActivity {
      * Perform all the necessary steps to setup, initialize, and load the map for the first time.
      */
     private void setupMap() {
-        ArcGISRuntimeEnvironment.setClientId(mClientId);
+        // ArcGISRuntimeEnvironment.setClientId(mClientId); // <== Don't do this or you are required to also set a license string
+        // ArcGISRuntimeEnvironment.setLicense(mLicenseString); // <== Don't do this or you are required to also set a license string
         Log.d("setupMap", "ArcGIS version: " + ArcGISRuntimeEnvironment.getAPIVersion() + ", " + ArcGISRuntimeEnvironment.getAPILabel());
         mMapView = (MapView) findViewById(R.id.mapView);
         mMap = new ArcGISMap(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
         mMapView.setMap(mMap);
         loadLayerWithService(mLayerServiceURL);
         setupChallengeHandler();
+        startDeviceLocator();
     }
 
     /**
@@ -559,7 +573,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         public void onLoginFailed(int errorCode, String errorMessage) {
-            showErrorAlert(getString(R.string.action_login), errorMessage + "(" + errorCode + ") " + getString(R.string.info_login_to_continue));
+            showErrorAlert(getString(R.string.action_login), errorMessage + "(" + errorCode + ") " + getString(R.string.info_login_to_route));
         }
     };
 
@@ -702,19 +716,55 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         Stop routeToStop = null;
                         Stop routeFromStop = null;
+                        final Point routeEndPoint;
+                        final Point currentLocation;
 
                         Geometry routeToPoint = mFeatureToRouteTo.getGeometry();
                         if (routeToPoint != null && routeToPoint.getGeometryType() == GeometryType.POINT) {
-                            routeToStop = new Stop((Point)routeToPoint);
+                            routeEndPoint = (Point)routeToPoint;
+                            routeToStop = new Stop(routeEndPoint);
+                            currentLocation = getDeviceCurrentLocation();
+                            if (currentLocation != null) {
+                                routeFromStop = new Stop(currentLocation);
+                            }
+                        } else {
+                            routeEndPoint = null;
+                            currentLocation = null;
                         }
                         if (routeToStop != null && routeFromStop != null) {
                             RouteParameters routeParameters = routeParametersFuture.get();
                             routeParameters.setReturnDirections(true);
                             routeParameters.setReturnRoutes(true);
+                            routeParameters.setPreserveFirstStop(true);
+                            routeParameters.setPreserveLastStop(true);
                             routeParameters.setOutputSpatialReference(mMapView.getSpatialReference());
                             routeParameters.setDirectionsDistanceTextUnits(DirectionDistanceTextUnits.IMPERIAL);
+                            routeParameters.setReturnStops(true);
                             routeParameters.getStops().add(routeFromStop);
                             routeParameters.getStops().add(routeToStop);
+                            final ListenableFuture<RouteResult> routeResultFuture = routeTask.solveAsync(routeParameters);
+                            routeTask.addDoneLoadingListener(new Runnable() {
+                                @Override
+                                public void run() {
+                                    try {
+                                        RouteResult routeResult = routeResultFuture.get();
+                                        if (routeResult != null) {
+                                            Route route = routeResult.getRoutes().get(0);
+                                            List<String> routeMessages = routeResult.getMessages();
+                                            if (route != null && route.getRouteGeometry() != null) {
+                                                clearRoutes();
+                                                showRouteInNewGraphicsLayer(route, currentLocation, routeEndPoint);
+                                            } else {
+                                                showErrorAlert(getString(R.string.route_error), getString(R.string.err_calcing_route));
+                                            }
+                                        }
+                                    } catch (ArcGISRuntimeException exception) {
+                                        Log.d("setupRouteParameters", "solveAsync Runtime exception: (" + exception.getErrorCode() + ") " + exception.getCause());
+                                    } catch (Exception exception) {
+                                        Log.d("setupRouteParameters", "solveAsync exception: " + exception.getLocalizedMessage());
+                                    }
+                                }
+                            });
                         } else {
                             Log.d("setupRouteParameters", "Not enough info to solve a route.");
                         }
@@ -730,14 +780,51 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    public void showRouteInNewGraphicsLayer(Route route, Point routeStartPoint, Point routeEndPoint) {
+        if (route != null) {
+            GraphicsOverlay graphicsOverlay = new GraphicsOverlay();
+            if (graphicsOverlay != null) {
+                SimpleLineSymbol routeSymbol = new SimpleLineSymbol(mLineStyle, mRouteColor, mRouteLineSize);
+                Graphic routeGraphic = new Graphic(route.getRouteGeometry(), routeSymbol);
+                if (routeGraphic != null) {
+                    graphicsOverlay.getGraphics().add(routeGraphic);
+                    SimpleMarkerSymbol routeEndpointMarker = new SimpleMarkerSymbol(SimpleMarkerSymbol.Style.CIRCLE, mRouteMarkerColor, mRouteLineSize);
+                    graphicsOverlay.getGraphics().add(new Graphic(routeStartPoint, routeEndpointMarker));
+                    graphicsOverlay.getGraphics().add(new Graphic(routeEndPoint, routeEndpointMarker));
+                    mMapView.getGraphicsOverlays().add(0, graphicsOverlay);
+                }
+            }
+        }
+    }
+
+    public void clearRoutes() {
+        ListenableList<GraphicsOverlay> mapGraphicsOverlays = mMapView.getGraphicsOverlays();
+        if (mapGraphicsOverlays != null) {
+            mapGraphicsOverlays.clear();
+        }
+    }
+
     public void startDeviceLocator() {
         try {
-            AndroidLocationDataSource locationDataSource = new AndroidLocationDataSource(this);
-            if (locationDataSource != null) {
-                locationDataSource.startAsync();
+            LocationDisplay locationDisplay = mMapView.getLocationDisplay();
+            if (locationDisplay != null) {
+                locationDisplay.setAutoPanMode(LocationDisplay.AutoPanMode.NAVIGATION);
+                locationDisplay.startAsync();
             }
         } catch (Exception exception) {
-            Log.d("getDeviceLocation", "Location datasource fails to init: (" + exception.getLocalizedMessage());
+            Log.d("startDeviceLocator", "Location datasource fails to init: (" + exception.getLocalizedMessage());
         }
+    }
+
+    public Point getDeviceCurrentLocation() {
+        try {
+            LocationDisplay locationDisplay = mMapView.getLocationDisplay();
+            if (locationDisplay != null) {
+                return locationDisplay.getMapLocation();
+            }
+        } catch (Exception exception) {
+            Log.d("getDeviceLocation", "Location datasource fails: (" + exception.getLocalizedMessage());
+        }
+        return null;
     }
 }
