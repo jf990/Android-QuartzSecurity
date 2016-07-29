@@ -5,12 +5,13 @@ An Android app demonstrating how to use Quartz runtime security services.
 
 There is an accompanying MS Word document that explains everything. It will be converted to MD/HTML once the project is ready.
 
- - Login users
- - Get a list of the organizations available basemaps
- - Allow loading of a selected basemap
- - Load and display a feature service from that organization
+## Features
+ - Login a user
+ - Get a list of the basemaps available to the organization of the logged in user
+ - Allow changing the basemap
+ - Load and display a feature service from that organization (2,000 breweries in the US)
  - Display popup info of a selected feature
- - Route to closest feature
+ - Route to selected feature from current location
 
 ## Follow up issues with Android team
 1. If we use `new Portal(mPortalURL, true);` to login, how do we logout?
@@ -25,6 +26,7 @@ There is an accompanying MS Word document that explains everything. It will be c
 
 * [System requirements](https://developers.arcgis.com/android/beta/guide/system-requirements.htm)
 * Basic knowledge of Android Java software development and practice. 
+* Basic understanding of key ArcGIS Features
 
 ## Resources
 
