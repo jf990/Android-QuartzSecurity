@@ -7,6 +7,7 @@
     <string name="action_route">Route</string>
     <string name="title_select_basemap">Select a base map</string>
     <string name="info_login_to_continue">You must login to select available base maps.</string>
+    <string name="info_login_to_route">You must login to use the route service.</string>
     <string name="info_not_logged_in">You are not logged in.</string>
     <string name="err_login_failed">Login failed - please try again to continue.</string>
     <string name="err_cannot_load_query">Cannot load portal query results. </string>
