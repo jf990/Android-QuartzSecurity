@@ -75,7 +75,8 @@ public class MainActivity extends AppCompatActivity {
     private boolean mLoadImagesSerial = true;
     private int mThumbnailsRequested = 0;
 
-    // Configuration to set at initial load or reset:
+    // Configuration to set at initial load or reset. These private variables are separated as we
+    // expect these values to be initialized from a config file or service.
     private Basemap.Type mStartBasemapType = Basemap.Type.STREETS;
     private double mStartLatitude = 40.7576;
     private double mStartLongitude = -73.9857;
@@ -93,7 +94,8 @@ public class MainActivity extends AppCompatActivity {
     private String mLayerServiceURL = "http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0";
     private String mRouteTaskURL = "http://route.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_NorthAmerica"; // http://route.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_World
 
-    // Configuration to restore on resume, reload:
+    // Configuration to restore on resume, reload: these are session variables that we save
+    // so we can restore after task switch, reload, refresh, etc.
     private Viewpoint mCurrentViewPoint;
     private double mMapScale;
 
@@ -162,11 +164,14 @@ public class MainActivity extends AppCompatActivity {
         return super.onPrepareOptionsMenu(menu);
     }
 
+    /**
+     * Handle action bar item clicks here. The option shows Login when user is not logged in, or
+     * logout when the user is logged in.
+     * @param item
+     * @return
+     */
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
         if (id == R.id.action_login) {
@@ -497,6 +502,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Setup the map touch handler so we can use touch to identify features on the feature layer.
+     */
     private void setMapTouchHandler() {
         mMapView.setOnTouchListener(new IdentifyFeatureLayerTouchListener(this, mMapView, mFeatureLayer));
     }
@@ -569,8 +577,8 @@ public class MainActivity extends AppCompatActivity {
      */
     private void onClickMapButton(View view) {
         if ( ! mUserIsLoggedIn) {
-            changeBasemapToWebMap();
-//            loginUser(loginCompletionCallbackForBasemaps);
+//            changeBasemapToWebMap(); // <== use to test loading a Web Map
+            loginUser(loginCompletionCallbackForBasemaps);
         } else {
              showBasemapSelector();
         }
@@ -711,11 +719,10 @@ public class MainActivity extends AppCompatActivity {
      *   1. User must be logged in. If user is not logged in then login now.
      *   2. Read device location. If locator is not on then turn it on and wait for a stable read.
      *   3. Load RouteTask. This is async and we wait for it to complete.
-     *   4. Load default Parameters
-     *   5. Set Parameters
-     *   6. Set stops: current device location, feature location
-     *   7. solve route
-     *   8. create graphics overlay
+     *   4. Load default Route Parameters
+     *   5. Set Route Parameters and set stops: current device location, feature location
+     *   7. Solve route
+     *   8. Create graphics overlay
      *   9. getRouteGeometry, add route graphics to graphics layer
      * @param featureToRouteTo The route ends here.
      */
@@ -723,7 +730,6 @@ public class MainActivity extends AppCompatActivity {
         if (featureToRouteTo != null) {
             mFeatureToRouteTo = featureToRouteTo;
             if ( ! mUserIsLoggedIn) {
-//                loadRouteTask();
                 loginUser(loginCompletionCallbackForRouting);
             } else {
                 loadRouteTask();
@@ -734,7 +740,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Make sure we are able to load the route task
+     * Make sure we are able to load the route task. Once loaded call setupRouteParameters to
+     * complete the route.
      */
     public void loadRouteTask() {
         final RouteTask routeTask = new RouteTask(mRouteTaskURL);
@@ -756,7 +763,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * With a loaded route task setup the route parameters.
+     * With a loaded route task setup the route parameters then send the task request to the server
+     * and wait for a route solve response. If the route is solved then draw the route on the map view.
      * @param routeTask
      */
     public void setupRouteParameters(final RouteTask routeTask) {
@@ -832,8 +840,15 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Given a route and the start and end points on the map, create a new graphics layer
+     * and draw the route and start/end markers, then add the graphics overlay to the map view.
+     * @param route
+     * @param routeStartPoint
+     * @param routeEndPoint
+     */
     public void showRouteInNewGraphicsLayer(Route route, Point routeStartPoint, Point routeEndPoint) {
-        if (route != null) {
+        if (route != null && routeStartPoint != null && routeEndPoint != null) {
             GraphicsOverlay graphicsOverlay = new GraphicsOverlay();
             if (graphicsOverlay != null) {
                 SimpleLineSymbol routeSymbol = new SimpleLineSymbol(mLineStyle, mRouteColor, mRouteLineSize);
@@ -849,6 +864,10 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Remove any graphics overlays we previously used for routing in preparation to show
+     * a new route.
+     */
     public void clearRoutes() {
         ListenableList<GraphicsOverlay> mapGraphicsOverlays = mMapView.getGraphicsOverlays();
         if (mapGraphicsOverlays != null) {
@@ -856,6 +875,10 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Start the device locator (GPS). The locator must be started and given time to stabilize
+     * before we can use getDeviceCurrentLocation to get an accurate reading.
+     */
     public void startDeviceLocator() {
         try {
             LocationDisplay locationDisplay = mMapView.getLocationDisplay();
@@ -868,6 +891,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Attempt to read the device locator and return the current device position in GPS coordinates.
+     * This function could return null if the locator cannot be read.
+     * @return {Point} a point on the map using the maps spatial reference.
+     */
     public Point getDeviceCurrentLocation() {
         try {
             LocationDisplay locationDisplay = mMapView.getLocationDisplay();
