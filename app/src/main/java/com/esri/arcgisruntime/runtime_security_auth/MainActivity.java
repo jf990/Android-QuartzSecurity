@@ -89,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
     private String mClientId = "OOraRX2FZx7X6cTs";
     private String mLicenseString = "unlicensed";
     private String mLayerItemId = "7995c5a997d248549e563178ad25c3e1";
+    private String mWebMapItemId = "e862b5ed1fbd48a1b084ecd68a30d85e";
     private String mLayerServiceURL = "http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0";
     private String mRouteTaskURL = "http://route.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_NorthAmerica"; // http://route.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_World
 
@@ -184,7 +185,7 @@ public class MainActivity extends AppCompatActivity {
      */
     private void setupMap() {
         // ArcGISRuntimeEnvironment.setClientId(mClientId); // <== Don't do this or you are required to also set a license string
-        // ArcGISRuntimeEnvironment.setLicense(mLicenseString); // <== Don't do this or you are required to also set a license string
+        // ArcGISRuntimeEnvironment.setLicense(mLicenseString); // <== Don't do this or you are required to have a valid license string
         Log.d("setupMap", "ArcGIS version: " + ArcGISRuntimeEnvironment.getAPIVersion() + ", " + ArcGISRuntimeEnvironment.getAPILabel());
         mMapView = (MapView) findViewById(R.id.mapView);
         mMap = new ArcGISMap(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
@@ -348,7 +349,6 @@ public class MainActivity extends AppCompatActivity {
                 if (position >= 0 && position < mBasemapList.size()) {
                     PortalItem portalItem = mBasemapList.get(position).getPortalItem();
                     if (portalItem != null) {
-                        Log.d("CLICK", "Clicked on " + portalItem.getTitle());
                         if (gridViewAlertDialog != null) {
                             mBasemapGridView = null;
                             gridViewAlertDialog.dismiss();
@@ -419,6 +419,57 @@ public class MainActivity extends AppCompatActivity {
         mMap.setBasemap(newBasemap);
         mMapView.setViewpointAsync(mCurrentViewPoint);
         mMapView.setViewpointScaleAsync(mMapScale);
+    }
+
+    /**
+     * Change the map to the web map portal item. I am mainly using this method to demonstrate
+     * requesting/loading a portal item while no user is logged in and invoking the challenge
+     * hander.
+     */
+    public void changeBasemapToWebMap() {
+        if (mArcgisPortal == null) {
+            mArcgisPortal = new Portal(mPortalURL, false);
+        }
+        mArcgisPortal.addDoneLoadingListener(new Runnable() {
+            @Override
+            public void run() {
+                LoadStatus loadStatus = mArcgisPortal.getLoadStatus();
+                if (loadStatus == LoadStatus.LOADED) {
+                    loadPortalItemWebMap(mWebMapItemId);
+                } else {
+                    ArcGISRuntimeException loadError = mArcgisPortal.getLoadError();
+                    showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_load_item) + " " + loadError.getLocalizedMessage());
+                }
+            }
+        });
+        mArcgisPortal.loadAsync();
+    }
+
+    /**
+     * Given an item id that represents a web map - load it and update the map.
+     * @param itemId
+     */
+    private void loadPortalItemWebMap(String itemId) {
+        final PortalItem portalItem = new PortalItem(mArcgisPortal, mWebMapItemId);
+        if (portalItem != null) {
+            mCurrentViewPoint = mMapView.getCurrentViewpoint(Viewpoint.Type.CENTER_AND_SCALE);
+            mMapScale = mMapView.getMapScale();
+            portalItem.addDoneLoadingListener(new Runnable() {
+                @Override
+                public void run() {
+                    LoadStatus loadStatus = portalItem.getLoadStatus();
+                    if (loadStatus == LoadStatus.LOADED) {
+                        mMapView.setMap(new ArcGISMap(portalItem));
+                        mMapView.setViewpointAsync(mCurrentViewPoint);
+                        mMapView.setViewpointScaleAsync(mMapScale);
+                    } else {
+                        ArcGISRuntimeException loadError = portalItem.getLoadError();
+                        showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_load_item) + " " + loadError.getLocalizedMessage());
+                    }
+                }
+            });
+            portalItem.loadAsync();
+        }
     }
 
     /**
@@ -518,7 +569,8 @@ public class MainActivity extends AppCompatActivity {
      */
     private void onClickMapButton(View view) {
         if ( ! mUserIsLoggedIn) {
-            loginUser(loginCompletionCallbackForBasemaps);
+            changeBasemapToWebMap();
+//            loginUser(loginCompletionCallbackForBasemaps);
         } else {
              showBasemapSelector();
         }
