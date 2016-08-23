@@ -21,6 +21,7 @@ import android.widget.TextView;
 
 import com.esri.arcgisruntime.ArcGISRuntimeEnvironment;
 import com.esri.arcgisruntime.ArcGISRuntimeException;
+import com.esri.arcgisruntime.UnitSystem;
 import com.esri.arcgisruntime.concurrent.ListenableFuture;
 import com.esri.arcgisruntime.datasource.Feature;
 import com.esri.arcgisruntime.datasource.arcgis.ServiceFeatureTable;
@@ -46,7 +47,6 @@ import com.esri.arcgisruntime.security.DefaultAuthenticationChallengeHandler;
 import com.esri.arcgisruntime.security.OAuthConfiguration;
 import com.esri.arcgisruntime.symbology.SimpleLineSymbol;
 import com.esri.arcgisruntime.symbology.SimpleMarkerSymbol;
-import com.esri.arcgisruntime.tasks.route.DirectionDistanceTextUnits;
 import com.esri.arcgisruntime.tasks.route.Route;
 import com.esri.arcgisruntime.tasks.route.RouteParameters;
 import com.esri.arcgisruntime.tasks.route.RouteResult;
@@ -72,7 +72,6 @@ public class MainActivity extends AppCompatActivity {
     private boolean mUseOAuth = true;
     private boolean mUserIsLoggedIn = false;
     private boolean mLoadedFeatureService = false;
-    private boolean mLoadImagesSerial = true;
     private int mThumbnailsRequested = 0;
 
     // Configuration to set at initial load or reset. These private variables are separated as we
@@ -311,9 +310,7 @@ public class MainActivity extends AppCompatActivity {
                     BasemapItem basemapItem = new BasemapItem(index, portalItem);
                     if (basemapItem != null) {
                         mThumbnailsRequested ++;
-                        if ((mLoadImagesSerial && index == 0) || ! mLoadImagesSerial) {
-                            basemapItem.loadImage(imageLoadedCompletionInterface);
-                        }
+                        basemapItem.loadImage(imageLoadedCompletionInterface);
                         mBasemapList.add(basemapItem);
                     }
                 }
@@ -592,7 +589,6 @@ public class MainActivity extends AppCompatActivity {
         if (mBasemapGridView == null || basemapItem == null) {
             return;
         }
-        Log.d("refreshBasemapThumbnail", "OK somehow need to set bitmap on gridview for " + basemapItem.getIndex());
         View gridViewCell = mBasemapGridView.getChildAt(basemapItem.getIndex());
         if (gridViewCell != null) {
             PortalItem portalItem = basemapItem.getPortalItem();
@@ -601,10 +597,11 @@ public class MainActivity extends AppCompatActivity {
             final ImageView imageView = (ImageView) gridViewCell.findViewById(R.id.imageViewMap);
             if (imageView != null) {
                 Bitmap thumbnail = basemapItem.getImage();
+                // If the image was already loaded we may have it immediately, otherwise a network
+                // request is issued and the image will arrive sometime in the future. When that
+                // happens we use ImageLoadedCompletionInterface to add the loaded image to the view.
                 if (thumbnail != null) {
                     imageView.setImageBitmap(thumbnail);
-                } else {
-                    Log.d("refreshBasemapThumbnail", "No image loaded (yet) for " + portalItem.getTitle());
                 }
             }
         }
@@ -657,21 +654,6 @@ public class MainActivity extends AppCompatActivity {
     };
 
     /**
-     * When loading items in serial order, find the next unloaded item and try to load it.
-     */
-    private void loadNextUnloadedThumbnail() {
-        for (int index = 0; index < mBasemapList.size(); index ++) {
-            BasemapItem nextBasemapItem = mBasemapList.get(index);
-            if (nextBasemapItem != null) {
-                if ( ! nextBasemapItem.isLoaded()) {
-                    nextBasemapItem.loadImage(imageLoadedCompletionInterface);
-                    break;
-                }
-            }
-        }
-    }
-
-    /**
      * Implementation of the ImageLoadedCompletionInterface when thumbnails load asynchronously and
      * we receive the delegation so we can determine what to do with the loaded (or failed) image.
      */
@@ -681,16 +663,11 @@ public class MainActivity extends AppCompatActivity {
             if (mBasemapGridView != null) {
                 refreshBasemapThumbnail(basemapItem);
             }
-            if (mLoadImagesSerial) {
-                loadNextUnloadedThumbnail();
-            }
         }
 
         public void onImageFailed(BasemapItem basemapItem, String errorMessage) {
             mThumbnailsRequested --;
-            if (mLoadImagesSerial) {
-                loadNextUnloadedThumbnail();
-            }
+            Log.d("loadThumbnailImage", "Failed to load image " + basemapItem.toString() + ": " + errorMessage);
         }
     };
 
@@ -798,7 +775,7 @@ public class MainActivity extends AppCompatActivity {
                             routeParameters.setPreserveFirstStop(true);
                             routeParameters.setPreserveLastStop(true);
                             routeParameters.setOutputSpatialReference(mMapView.getSpatialReference());
-                            routeParameters.setDirectionsDistanceTextUnits(DirectionDistanceTextUnits.IMPERIAL);
+                            routeParameters.setDirectionsDistanceUnits(UnitSystem.IMPERIAL);
                             routeParameters.setReturnStops(true);
                             routeParameters.getStops().add(routeFromStop);
                             routeParameters.getStops().add(routeToStop);

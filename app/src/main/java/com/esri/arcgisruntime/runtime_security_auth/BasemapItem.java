@@ -55,7 +55,6 @@ public class BasemapItem {
         if (mLoadPending || mLoaded || mPortalItem == null) {
             return; // don't bother if there is nothing to load or we are already loading it
         }
-        Log.d("BasemapItem.loadImage", "Requested loadImage for " + mPortalItem.getTitle() + " (" + mIndex + ")");
         mLoadPending = true;
         mItemThumbnailDataFuture = mPortalItem.fetchThumbnailAsync();
         mItemThumbnailDataFuture.addDoneListener(new Runnable() {
@@ -72,7 +71,6 @@ public class BasemapItem {
             if ((itemThumbnailData != null) && (itemThumbnailData.length > 0)) {
                 mImage = BitmapFactory.decodeByteArray(itemThumbnailData, 0, itemThumbnailData.length);
                 mLoaded = true;
-                Log.d("BasemapItem.loadImage", "loadImage complete for " + mPortalItem.getTitle() + " (" + mIndex + ")");
                 if (imageLoadComplete != null) {
                     imageLoadComplete.onImageCompleted(this);
                 }
