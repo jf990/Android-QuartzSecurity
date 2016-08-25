@@ -11,22 +11,24 @@ There is an accompanying MS Word document that explains everything. It will be c
  - Allow changing the basemap
  - Load and display a feature service from that organization (2,000 breweries in the US)
  - Display popup info of a selected feature
- - Route to selected feature from current location
+ - Route to selected feature from current location (requires a user logged in)
 
 ## Follow up issues with Android team
-1. If we use `new Portal(mPortalURL, true);` to login, how do we logout?
-2. If using the load a portal constructor as a user login facility and then `loadStatus = arcgisPortal.getLoadStatus(); if (loadStatus != LoadStatus.LOADED)` how do we determine the cause of the login failure?
+1. If using the load a portal constructor as a user login facility and then `loadStatus = arcgisPortal.getLoadStatus(); if (loadStatus != LoadStatus.LOADED)` how do we determine the cause of the login failure?
 
 ## Instructions
 
 1. Fork and then clone the repo. 
 2. [Install the SDK](https://developers.arcgis.com/android/beta/guide/install-and-set-up.htm)
+3. Edit MainActivity.java and set the configuration variables to match your project definition.
 
 ## Requirements
 
 * [System requirements](https://developers.arcgis.com/android/beta/guide/system-requirements.htm)
 * Basic knowledge of Android Java software development and practice. 
-* Basic understanding of key ArcGIS Features
+* Basic understanding of key ArcGIS Features.
+* Set up a developer account on Developers.arcgis.com.
+* Set up an Application on Developers.arcgis.com.
 
 ## Resources
 

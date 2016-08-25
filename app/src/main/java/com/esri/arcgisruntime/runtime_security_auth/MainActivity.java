@@ -60,6 +60,28 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
+    // Change these configuration variables based on the needs of your project:
+    private String mPortalURL = "http://www.arcgis.com/";             // Server where your users login with OAuth
+    private String mOAuthRedirectURI = "arcgis-runtime-auth://auth";  // Your app redirect URL also set in AndroidManifest.xml "android:scheme="
+    private String mClientId = "OOraRX2FZx7X6cTs";                    // ArcGIS Online client Id for your app definition
+    private String mLicenseString = "unlicensed";                     // If you have a ArcGIS license string put it here
+    private String mLayerItemId = "7995c5a997d248549e563178ad25c3e1";
+    private String mWebMapItemId = "e862b5ed1fbd48a1b084ecd68a30d85e";
+    private String mLayerServiceURL = "http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0";
+
+    // Configuration to set at initial load or reset. These private variables are separated as we
+    // expect these values to be initialized from a config file or service.
+    private Basemap.Type mStartBasemapType = Basemap.Type.STREETS;
+    private double mStartLatitude = 40.7576;
+    private double mStartLongitude = -73.9857;
+    private int mStartLevelOfDetail = 12;
+    private int mRouteColor = 0xa022bb22;
+    private int mRouteMarkerColor = 0xa0bb2222;
+    private int mRouteLineSize = 20;
+    private SimpleLineSymbol.Style mLineStyle = SimpleLineSymbol.Style.DASH_DOT;
+    private String mRouteTaskURL = "http://route.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_NorthAmerica"; // http://route.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_World
+
+    // Internal variables used by MainActivity to manage its own state
     private MapView mMapView = null;
     private GridView mBasemapGridView = null;
     private ArcGISMap mMap = null;
@@ -74,32 +96,13 @@ public class MainActivity extends AppCompatActivity {
     private boolean mLoadedFeatureService = false;
     private int mThumbnailsRequested = 0;
 
-    // Configuration to set at initial load or reset. These private variables are separated as we
-    // expect these values to be initialized from a config file or service.
-    private Basemap.Type mStartBasemapType = Basemap.Type.STREETS;
-    private double mStartLatitude = 40.7576;
-    private double mStartLongitude = -73.9857;
-    private int mStartLevelOfDetail = 12;
-    private int mRouteColor = 0xa022bb22;
-    private int mRouteMarkerColor = 0xa0bb2222;
-    private int mRouteLineSize = 20;
-    private SimpleLineSymbol.Style mLineStyle = SimpleLineSymbol.Style.DASH_DOT;
-    private String mPortalURL = "http://www.arcgis.com/";
-    private String mOAuthRedirectURI = "arcgis-runtime-auth://auth";
-    private String mClientId = "OOraRX2FZx7X6cTs";
-    private String mLicenseString = "unlicensed";
-    private String mLayerItemId = "7995c5a997d248549e563178ad25c3e1";
-    private String mWebMapItemId = "e862b5ed1fbd48a1b084ecd68a30d85e";
-    private String mLayerServiceURL = "http://services1.arcgis.com/6677msI40mnLuuLr/arcgis/rest/services/US_Breweries/FeatureServer/0";
-    private String mRouteTaskURL = "http://route.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_NorthAmerica"; // http://route.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_World
-
     // Configuration to restore on resume, reload: these are session variables that we save
     // so we can restore after task switch, reload, refresh, etc.
     private Viewpoint mCurrentViewPoint;
     private double mMapScale;
 
     /**
-     * Define a delegation interface for the login completion event
+     * Define a delegation interface for the asynchronous login completion event.
      */
     interface LoginCompletionInterface {
         void onLoginCompleted();
