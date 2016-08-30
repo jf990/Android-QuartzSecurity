@@ -709,11 +709,11 @@ public class MainActivity extends AppCompatActivity {
     public void startRouteTask(Feature featureToRouteTo) {
         if (featureToRouteTo != null) {
             mFeatureToRouteTo = featureToRouteTo;
-            if ( ! mUserIsLoggedIn) {
-                loginUser(loginCompletionCallbackForRouting);
-            } else {
+//            if ( ! mUserIsLoggedIn) {
+//                loginUser(loginCompletionCallbackForRouting);
+//            } else {
                 loadRouteTask();
-            }
+//            }
         } else {
             Log.d("startRouteTask", "No feature to end route task!");
         }
