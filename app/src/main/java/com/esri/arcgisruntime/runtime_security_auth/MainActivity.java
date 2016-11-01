@@ -6,11 +6,15 @@ package com.esri.arcgisruntime.runtime_security_auth;
 
 import android.app.AlertDialog;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.text.TextUtils;
 import android.util.Log;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -23,11 +27,16 @@ import com.esri.arcgisruntime.ArcGISRuntimeEnvironment;
 import com.esri.arcgisruntime.ArcGISRuntimeException;
 import com.esri.arcgisruntime.UnitSystem;
 import com.esri.arcgisruntime.concurrent.ListenableFuture;
-import com.esri.arcgisruntime.datasource.Feature;
-import com.esri.arcgisruntime.datasource.arcgis.ServiceFeatureTable;
+import com.esri.arcgisruntime.data.Feature;
+import com.esri.arcgisruntime.data.ServiceFeatureTable;
 import com.esri.arcgisruntime.geometry.Geometry;
 import com.esri.arcgisruntime.geometry.GeometryType;
 import com.esri.arcgisruntime.geometry.Point;
+import com.esri.arcgisruntime.geometry.SpatialReference;
+import com.esri.arcgisruntime.layers.ArcGISMapImageLayer;
+import com.esri.arcgisruntime.layers.ArcGISTiledLayer;
+import com.esri.arcgisruntime.layers.ArcGISVectorTiledLayer;
+import com.esri.arcgisruntime.layers.Layer;
 import com.esri.arcgisruntime.loadable.LoadStatus;
 import com.esri.arcgisruntime.layers.FeatureLayer;
 import com.esri.arcgisruntime.mapping.Basemap;
@@ -40,18 +49,17 @@ import com.esri.arcgisruntime.mapping.view.LocationDisplay;
 import com.esri.arcgisruntime.mapping.view.MapView;
 import com.esri.arcgisruntime.portal.Portal;
 import com.esri.arcgisruntime.portal.PortalItem;
-import com.esri.arcgisruntime.portal.PortalItemType;
 import com.esri.arcgisruntime.portal.PortalQueryResultSet;
 import com.esri.arcgisruntime.security.AuthenticationManager;
 import com.esri.arcgisruntime.security.DefaultAuthenticationChallengeHandler;
 import com.esri.arcgisruntime.security.OAuthConfiguration;
 import com.esri.arcgisruntime.symbology.SimpleLineSymbol;
 import com.esri.arcgisruntime.symbology.SimpleMarkerSymbol;
-import com.esri.arcgisruntime.tasks.route.Route;
-import com.esri.arcgisruntime.tasks.route.RouteParameters;
-import com.esri.arcgisruntime.tasks.route.RouteResult;
-import com.esri.arcgisruntime.tasks.route.RouteTask;
-import com.esri.arcgisruntime.tasks.route.Stop;
+import com.esri.arcgisruntime.tasks.networkanalysis.Route;
+import com.esri.arcgisruntime.tasks.networkanalysis.RouteParameters;
+import com.esri.arcgisruntime.tasks.networkanalysis.RouteResult;
+import com.esri.arcgisruntime.tasks.networkanalysis.RouteTask;
+import com.esri.arcgisruntime.tasks.networkanalysis.Stop;
 import com.esri.arcgisruntime.util.ListenableList;
 
 import java.util.ArrayList;
@@ -74,7 +82,7 @@ public class MainActivity extends AppCompatActivity {
     private Basemap.Type mStartBasemapType = Basemap.Type.STREETS;
     private double mStartLatitude = 40.7576;
     private double mStartLongitude = -73.9857;
-    private int mStartLevelOfDetail = 12;
+    private int mStartLevelOfDetail = 11;
     private int mRouteColor = 0xa022bb22;
     private int mRouteMarkerColor = 0xa0bb2222;
     private int mRouteLineSize = 20;
@@ -188,6 +196,64 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
+     * Our app allows the creation of different types of basemaps to use as the basemap, but we still
+     * have to tell the SDK which basemap constructor we want.
+     *
+     * TODO: I haven't decided yet how to determine which basemap to load on init so this code is
+     * experimental looking at the various possibilities.
+     * @return Basemap
+     */
+    private Basemap createBaseMap() {
+        final int mapStyle = 1;
+        Basemap basemap;
+
+        if (mapStyle == 1) {
+            // Create a raster tile basemap from a tiled layer service
+            basemap = new Basemap(new ArcGISTiledLayer("http://services.arcgisonline.com/arcgis/rest/services/World_Street_Map/MapServer"));
+        } else if (mapStyle == 2) {
+            // Create a vector tile basemap from a vector tile service
+            basemap = new Basemap(new ArcGISVectorTiledLayer("https://www.arcgis.com/sharing/rest/content/items/8ca2c292cda9495696d74342cff7132a/resources/styles/root.json"));
+//            basemap = new Basemap(new ArcGISVectorTiledLayer("https://www.arcgis.com/sharing/rest/content/items/bf79e422e9454565ae0cbe9553cf6471/resources/styles/root.json"));
+        } else if (mapStyle == 3) {
+            // Create a basemap from a portal item. This is a bit ugly and conflicts with our handling of Portal later in the app. TODO: refactor.
+            basemap = new Basemap(new PortalItem(new Portal(mPortalURL), mWebMapItemId));
+        } else {
+            // create an ArcGIS Online standard basemap from the enum of possibilities
+            switch (mStartBasemapType) {
+                case IMAGERY:
+                    basemap = Basemap.createImagery();
+                    break;
+                case IMAGERY_WITH_LABELS:
+                    basemap = Basemap.createImageryWithLabels();
+                    break;
+                case STREETS:
+                    basemap = Basemap.createStreets();
+                    break;
+                case OCEANS:
+                    basemap = Basemap.createOceans();
+                    break;
+                case NATIONAL_GEOGRAPHIC:
+                    basemap = Basemap.createNationalGeographic();
+                    break;
+                case LIGHT_GRAY_CANVAS:
+                    basemap = Basemap.createLightGrayCanvas();
+                    break;
+                case TOPOGRAPHIC:
+                    basemap = Basemap.createTopographic();
+                    break;
+                case TERRAIN_WITH_LABELS:
+                    basemap = Basemap.createTerrainWithLabels();
+                    break;
+                default:
+                    Log.d("createBaseMap", "Request basemap enum is not defined: " + mStartBasemapType);
+                    basemap = Basemap.createStreets();
+                    break;
+            }
+        }
+        return basemap;
+    }
+
+    /**
      * Perform all the necessary steps to setup, initialize, and load the map for the first time.
      */
     private void setupMap() {
@@ -195,11 +261,101 @@ public class MainActivity extends AppCompatActivity {
         // ArcGISRuntimeEnvironment.setLicense(mLicenseString); // <== Don't do this or you are required to have a valid license string
         Log.d("setupMap", "ArcGIS version: " + ArcGISRuntimeEnvironment.getAPIVersion() + ", " + ArcGISRuntimeEnvironment.getAPILabel());
         mMapView = (MapView) findViewById(R.id.mapView);
-        mMap = new ArcGISMap(mStartBasemapType, mStartLatitude, mStartLongitude, mStartLevelOfDetail);
-        mMapView.setMap(mMap);
-        loadLayerWithService(mLayerServiceURL);
-        setupChallengeHandler();
-        startDeviceLocator();
+        if (mMapView != null) {
+            mMap = new ArcGISMap(createBaseMap());
+            // TODO: Can't do this here! have to wait for the map to load! Even though constructor ArcGISMap(type, lat, long, lod) is able to do it
+            // mMapView.setViewpointCenterAsync(new Point(mStartLongitude, mStartLatitude, SpatialReference.create(4326)), 95000);
+            mMap.addDoneLoadingListener(new Runnable() {
+                @Override
+                public void run() {
+                    if (mMap.getLoadStatus() == LoadStatus.LOADED) {
+                        SpatialReference spatialReference = SpatialReference.create(4326); // mMap.getSpatialReference(); // SpatialReference.create(4326); 3857 or 4326?
+                        mMapView.setViewpointCenterAsync(new Point(mStartLongitude, mStartLatitude, spatialReference), 95000);
+                        updateAttribution();
+                    } else {
+                        showErrorAlert(getString(R.string.network_error), getString(R.string.err_cannot_load_basemap));
+                    }
+                }
+            });
+            mMapView.setMap(mMap);
+            //loadVectorTileLayerWithService("https://www.arcgis.com/sharing/rest/content/items/bf79e422e9454565ae0cbe9553cf6471/resources/styles/root.json");
+            loadVectorTileLayerWithService("https://www.arcgis.com/sharing/rest/content/items/8ca2c292cda9495696d74342cff7132a/resources/styles/root.json");
+            // loadFeatureLayerWithService(mLayerServiceURL);
+            setupChallengeHandler();
+            setupAttribution();
+            startDeviceLocator();
+        }
+    }
+
+    /**
+     * Configure the TextView we are going to use to display any map attributions.
+     */
+    private void setupAttribution() {
+        TextView attributionTextView = (TextView) findViewById(R.id.mapAttribution);
+        if (attributionTextView != null) {
+            attributionTextView.setTextColor(Color.parseColor("#323232"));
+            attributionTextView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+            attributionTextView.setGravity(Gravity.LEFT);
+            attributionTextView.setSingleLine(true);
+            attributionTextView.setEllipsize(TextUtils.TruncateAt.END);
+        }
+    }
+
+    /**
+     * Determine the map attribution from the basemap collection of layers. This method attempts to
+     * handle this rather generically so it attempts to handle any possible collection of layer types.
+     */
+    private String getBasemapAttribution(ArcGISMap map) {
+        String attributionText = null;
+        if (map != null) {
+            LayerList mapLayers = map.getBasemap().getBaseLayers();
+            if (mapLayers != null && ! mapLayers.isEmpty()) {
+                try {
+                    // TODO: iterate the layers, score the layers, merge attributions - produce the best attribution text possible
+                    String layerAttribution;
+                    for (int i = 0; i < mapLayers.size(); i ++) {
+                        Layer mapLayer = mapLayers.get(i);
+                        layerAttribution = mapLayer.getAttribution();
+                        if (layerAttribution == null || layerAttribution.length() == 0) {
+                            if (mapLayer instanceof ArcGISTiledLayer) {
+                                layerAttribution = ((ArcGISTiledLayer) mapLayer).getMapServiceInfo().getAttribution();
+                            } else if (mapLayer instanceof ArcGISMapImageLayer) {
+                                layerAttribution = ((ArcGISMapImageLayer) mapLayer).getMapServiceInfo().getAttribution();
+                            } else if (mapLayer instanceof ArcGISVectorTiledLayer) {
+                                layerAttribution = "Haven't figured out yet how to get attribution on vector layers";
+                            }
+                        }
+                        if (attributionText == null) {
+                            attributionText = layerAttribution;
+                        } else {
+                            attributionText += "; " + layerAttribution;
+                        }
+                    }
+                } catch (Exception genericException) {
+                    Log.d("updateAttribution", "Cant cast the layer");
+                    attributionText = "Map attribution unknown.";
+                }
+            }
+            if (attributionText == null || attributionText.length() == 0) {
+                attributionText = "Basemap has no attribution.";
+            }
+        }
+        return attributionText;
+    }
+
+    /**
+     * Update the map attribution displayed based on the current map layer and extent configuration.
+     */
+    private void updateAttribution() {
+        if (mMap != null) {
+            TextView attributionTextView = (TextView) findViewById(R.id.mapAttribution);
+            if (attributionTextView != null) {
+                String attributionText = getBasemapAttribution(mMap);
+                if (attributionText != null) {
+                    attributionTextView.setText(attributionText);
+                }
+            }
+        }
     }
 
     /**
@@ -371,7 +527,7 @@ public class MainActivity extends AppCompatActivity {
      * @param portalItem
      */
     public void changeBasemapToPortalItem(final PortalItem portalItem) {
-        if (portalItem != null && portalItem.getType() == PortalItemType.WEBMAP) {
+        if (portalItem != null && portalItem.getType() == PortalItem.Type.WEBMAP) {
             mCurrentViewPoint = mMapView.getCurrentViewpoint(Viewpoint.Type.CENTER_AND_SCALE);
             mMapScale = mMapView.getMapScale();
             portalItem.addDoneLoadingListener(new Runnable() {
@@ -382,6 +538,7 @@ public class MainActivity extends AppCompatActivity {
                         mMap.setBasemap(new Basemap(portalItem));
                         mMapView.setViewpointAsync(mCurrentViewPoint);
                         mMapView.setViewpointScaleAsync(mMapScale);
+                        updateAttribution();
                     } else {
                         ArcGISRuntimeException loadError = portalItem.getLoadError();
                         showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_load_item) + " " + loadError.getLocalizedMessage());
@@ -393,14 +550,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * This method cycles through 6 standard base maps. Use this as a test interface to display
+     * This method cycles through 8 standard base maps. Use this as a test interface to display
      * different base maps.
      */
     public void changeBasemapToBasemapType() {
         Basemap newBasemap;
         mCurrentViewPoint = mMapView.getCurrentViewpoint(Viewpoint.Type.CENTER_AND_SCALE);
         mMapScale = mMapView.getMapScale();
-        mNextBasemap = (mNextBasemap + 1) % 6;
+        mNextBasemap = (mNextBasemap + 1) % 8;
         switch(mNextBasemap) {
             case 0:
                 newBasemap = Basemap.createImageryWithLabels();
@@ -416,6 +573,12 @@ public class MainActivity extends AppCompatActivity {
                 break;
             case 4:
                 newBasemap = Basemap.createTopographic();
+                break;
+            case 5:
+                newBasemap = Basemap.createTerrainWithLabels();
+                break;
+            case 6:
+                newBasemap = Basemap.createOceans();
                 break;
             default:
                 newBasemap = Basemap.createImagery();
@@ -467,6 +630,7 @@ public class MainActivity extends AppCompatActivity {
                         mMapView.setMap(new ArcGISMap(portalItem));
                         mMapView.setViewpointAsync(mCurrentViewPoint);
                         mMapView.setViewpointScaleAsync(mMapScale);
+                        updateAttribution();
                     } else {
                         ArcGISRuntimeException loadError = portalItem.getLoadError();
                         showErrorAlert(getString(R.string.system_error), getString(R.string.err_cannot_load_item) + " " + loadError.getLocalizedMessage());
@@ -513,12 +677,23 @@ public class MainActivity extends AppCompatActivity {
      * Load a feature layer given a feature service URL.
      * @param serviceURL String The URL pointing to the feature service (from ArcGIS Online.)
      */
-    private void loadLayerWithService(String serviceURL) {
+    private void loadFeatureLayerWithService(String serviceURL) {
         ServiceFeatureTable serviceFeatureTable = new ServiceFeatureTable(serviceURL);
         mFeatureLayer = new FeatureLayer(serviceFeatureTable);
         mMap.getOperationalLayers().add(mFeatureLayer);
         mLoadedFeatureService = true;
         setMapTouchHandler();
+    }
+
+    /**
+     * Load a vector tile layer given a service URL.
+     * @param serviceURL String The URL pointing to the vector tile service (from ArcGIS Online.)
+     */
+    private void loadVectorTileLayerWithService(String serviceURL) {
+        ArcGISVectorTiledLayer vectorTileLayer = new ArcGISVectorTiledLayer(serviceURL);
+        if (vectorTileLayer != null) {
+            mMap.getOperationalLayers().add(vectorTileLayer);
+        }
     }
 
     /**
@@ -554,6 +729,7 @@ public class MainActivity extends AppCompatActivity {
     private void layerLoaded (final PortalItem portalItem) {
         LoadStatus loadStatus = portalItem.getLoadStatus();
         if (loadStatus == LoadStatus.LOADED) {
+            updateAttribution();
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
@@ -749,7 +925,7 @@ public class MainActivity extends AppCompatActivity {
      */
     public void setupRouteParameters(final RouteTask routeTask) {
         if (mFeatureToRouteTo != null && mUserIsLoggedIn) {
-            final ListenableFuture<RouteParameters> routeParametersFuture = routeTask.generateDefaultParametersAsync();
+            final ListenableFuture<RouteParameters> routeParametersFuture = routeTask.createDefaultParametersAsync();
             routeParametersFuture.addDoneListener(new Runnable() {
                 @Override
                 public void run() {
@@ -782,7 +958,7 @@ public class MainActivity extends AppCompatActivity {
                             routeParameters.setReturnStops(true);
                             routeParameters.getStops().add(routeFromStop);
                             routeParameters.getStops().add(routeToStop);
-                            final ListenableFuture<RouteResult> routeResultFuture = routeTask.solveAsync(routeParameters);
+                            final ListenableFuture<RouteResult> routeResultFuture = routeTask.solveRouteAsync(routeParameters);
                             routeTask.addDoneLoadingListener(new Runnable() {
                                 @Override
                                 public void run() {

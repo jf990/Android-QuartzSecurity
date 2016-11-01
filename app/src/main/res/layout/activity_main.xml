@@ -32,4 +32,14 @@
         android:layout_marginBottom="@dimen/fab_margin_bottom"
         android:src="@android:drawable/ic_dialog_map" />
 
+    <TextView
+        android:id="@+id/mapAttribution"
+        android:layout_width="fill_parent"
+        android:layout_height="16dp"
+        android:layout_marginRight="116dp"
+        android:layout_gravity="bottom|left"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentLeft="true"
+        android:layout_marginBottom="0dp" />
+
 </android.support.design.widget.CoordinatorLayout>

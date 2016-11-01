@@ -15,7 +15,7 @@ import com.esri.arcgisruntime.portal.Portal;
 import com.esri.arcgisruntime.portal.PortalGroup;
 import com.esri.arcgisruntime.portal.PortalInfo;
 import com.esri.arcgisruntime.portal.PortalItem;
-import com.esri.arcgisruntime.portal.PortalQueryParams;
+import com.esri.arcgisruntime.portal.PortalQueryParameters;
 import com.esri.arcgisruntime.portal.PortalQueryResultSet;
 
 
@@ -34,7 +34,7 @@ public class FetchGroupBasemaps {
     public Void start() throws Exception {
         try {
             PortalInfo portalInformation = mArcgisPortal.getPortalInfo();
-            PortalQueryParams queryParams = new PortalQueryParams();
+            PortalQueryParameters queryParams = new PortalQueryParameters();
             queryParams.setQuery(portalInformation.getBasemapGalleryGroupQuery());
             queryParams.setCanSearchPublic(true);
             final ListenableFuture<PortalQueryResultSet<PortalGroup>> groupFuture = mArcgisPortal.findGroupsAsync(queryParams);
@@ -44,8 +44,8 @@ public class FetchGroupBasemaps {
                     try {
                         PortalQueryResultSet<PortalGroup> basemapGroupResult = groupFuture.get();
                         PortalGroup group = basemapGroupResult.getResults().get(0);
-                        PortalQueryParams basemapQueryParams = new PortalQueryParams();
-                        basemapQueryParams.setQueryForItemsInGroup(group.getId());
+                        PortalQueryParameters basemapQueryParams = new PortalQueryParameters();
+                        basemapQueryParams.setQueryForItemsInGroup(group.getGroupId());
                         final ListenableFuture<PortalQueryResultSet<PortalItem>> contentFuture = mArcgisPortal.findItemsAsync(basemapQueryParams);
                         contentFuture.addDoneListener(new Runnable() {
                             @Override

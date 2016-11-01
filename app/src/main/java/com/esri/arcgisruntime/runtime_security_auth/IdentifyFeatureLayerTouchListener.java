@@ -15,7 +15,7 @@ import android.view.MotionEvent;
 
 import com.esri.arcgisruntime.ArcGISRuntimeException;
 import com.esri.arcgisruntime.concurrent.ListenableFuture;
-import com.esri.arcgisruntime.datasource.Feature;
+import com.esri.arcgisruntime.data.Feature;
 import com.esri.arcgisruntime.layers.FeatureLayer;
 import com.esri.arcgisruntime.mapping.GeoElement;
 import com.esri.arcgisruntime.mapping.view.DefaultMapViewOnTouchListener;
@@ -68,7 +68,7 @@ public class IdentifyFeatureLayerTouchListener extends DefaultMapViewOnTouchList
         boolean identified = true;
         if (mMapView != null && mFeatureLayer != null) {
             try {
-                final ListenableFuture<IdentifyLayerResult> identifyFuture = mMapView.identifyLayerAsync(mFeatureLayer, screenPoint, 32.0, 1);
+                final ListenableFuture<IdentifyLayerResult> identifyFuture = mMapView.identifyLayerAsync(mFeatureLayer, screenPoint, 32.0, true);
                 identifyFuture.addDoneListener(new Runnable() {
                     @Override
                     public void run() {
@@ -80,7 +80,7 @@ public class IdentifyFeatureLayerTouchListener extends DefaultMapViewOnTouchList
                                 if (identifyLayerResult.getLayerContent() instanceof FeatureLayer) {
                                     featureLayer = (FeatureLayer) identifyLayerResult.getLayerContent();
                                 }
-                                List<GeoElement> identifiedFeaturesList = identifyLayerResult.getIdentifiedElements();
+                                List<GeoElement> identifiedFeaturesList = identifyLayerResult.getElements();
                                 if (identifiedFeaturesList.size() > 0) {
                                     // Our app only wants one feature selected at a time. Monitor the last
                                     // selected feature so we can pass it to the route task if the user asks for a route.

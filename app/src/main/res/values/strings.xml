@@ -16,11 +16,13 @@
     <string name="err_cannot_create_object">Cannot create a required object. </string>
     <string name="err_cannot_create_oauth">Cannot setup OAuth. </string>
     <string name="err_cannot_load_layer">Cannot load the required layer.</string>
+    <string name="err_cannot_load_basemap">Cannot load the map. Check your network.</string>
     <string name="err_login_required">You must login before you can use this feature.</string>
     <string name="err_no_items">No items were found on the portal.</string>
     <string name="err_fetching_basemaps">Error while fetching base maps from portal.</string>
     <string name="err_fetching_feature">Error while getting feature attributes.</string>
     <string name="err_calcing_route">Not able to determine route.</string>
+    <string name="network_error">Network error</string>
     <string name="system_error">System error</string>
     <string name="unknown_error">Unknown error</string>
     <string name="sequence_error">Sequence error</string>
