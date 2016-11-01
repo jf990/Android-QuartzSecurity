@@ -302,8 +302,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Determine the map attribution from the basemap collection of layers. This method attempts to
-     * handle this rather generically so it attempts to handle any possible collection of layer types.
+     * Determine the map attribution from the basemap collection of layers by iterating the layers
+     * and concatenating all attributions. This is the quick-and-dumb method that does not consider
+     * extent and scale.
+     * TODO: iterate the layers, score the layers, merge attributions - produce the best attribution text possible
+     * TODO: See https://devtopia.esri.com/runtime/dotnet-api/blob/10.2.6/src/Esri.ArcGISRuntime/Esri.ArcGISRuntime.Shared/Layers/CommunityAttribution.cs
+     * TODO: See https://github.com/Esri/esri-leaflet/blob/master/src/Util.js#L218
      */
     private String getBasemapAttribution(ArcGISMap map) {
         String attributionText = null;
@@ -311,18 +315,19 @@ public class MainActivity extends AppCompatActivity {
             LayerList mapLayers = map.getBasemap().getBaseLayers();
             if (mapLayers != null && ! mapLayers.isEmpty()) {
                 try {
-                    // TODO: iterate the layers, score the layers, merge attributions - produce the best attribution text possible
                     String layerAttribution;
-                    for (int i = 0; i < mapLayers.size(); i ++) {
+                    for (int i = mapLayers.size() - 1; i >= 0; i --) {
                         Layer mapLayer = mapLayers.get(i);
                         layerAttribution = mapLayer.getAttribution();
-                        if (layerAttribution == null || layerAttribution.length() == 0) {
+                        if (layerAttribution == null || layerAttribution.length() == 0) { // because getAttribution() returns ""
                             if (mapLayer instanceof ArcGISTiledLayer) {
                                 layerAttribution = ((ArcGISTiledLayer) mapLayer).getMapServiceInfo().getAttribution();
                             } else if (mapLayer instanceof ArcGISMapImageLayer) {
                                 layerAttribution = ((ArcGISMapImageLayer) mapLayer).getMapServiceInfo().getAttribution();
                             } else if (mapLayer instanceof ArcGISVectorTiledLayer) {
                                 layerAttribution = "Haven't figured out yet how to get attribution on vector layers";
+                            } else {
+                                layerAttribution = "Don't know how to get attribution for " + mapLayer.getClass();
                             }
                         }
                         if (attributionText == null) {
